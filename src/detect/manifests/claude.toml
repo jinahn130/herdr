@@ -1,7 +1,7 @@
 id = "claude"
-version = "2026.09.04.1"
+version = "2026.09.10.1"
 min_engine_version = 2
-updated_at = "2026-09-04T00:00:00Z"
+updated_at = "2026-09-10T00:00:00Z"
 aliases = ["claude-code"]
 
 [[rules]]
@@ -11,7 +11,12 @@ priority = 1100
 region = "osc_title"
 visible_working = true
 # Braille covers <= 2.1.227; half-circles are the 2.1.228 busy spinner.
-regex = ['^[\x{2800}-\x{28FF}\x{25D0}-\x{25D3}] ']
+any = [
+  { regex = ['^[\x{2800}-\x{28FF}\x{25D0}-\x{25D3}] '] },
+  # Claude 2.1.268 uses a literal activity prefix and inserts the active tool
+  # between the project and model names. The idle title has no tool segment.
+  { regex = ['^\[\.\.\.\] .+:\s*[^·]+\s+·\s+.+$'] },
+]
 
 [[rules]]
 id = "live_turn_working"
@@ -22,6 +27,7 @@ visible_working = true
 any = [
   { line_regex = ['^\s*[⏸⏵].*esc to interrupt(?:\s|·|$)'] },
   { line_regex = ['^\s*[\x{002A}\x{00B7}\x{2722}\x{2736}\x{273B}\x{273D}]\s+\S.*…(?:\s+\(\d+[smh](?:\s|·)|\s*$)'] },
+  { line_regex = ['^\s*[\x{002A}\x{00B7}\x{2722}\x{2736}\x{273B}\x{273D}]\s+\S.*…\s+\(thinking[^)]*\)\s*$'] },
 ]
 
 [[rules]]
@@ -126,7 +132,9 @@ id = "live_prompt_box"
 state = "idle"
 priority = 950
 region = "prompt_box_body"
-visible_idle = true
+# Claude keeps the empty prompt visible while an active response redraws its
+# spinner. Let the detector's short working-to-idle confirmation window absorb
+# those repaint gaps before publishing a real completion.
 line_regex = ['^\s*❯']
 not = [
   { contains = ["enter to select"] },

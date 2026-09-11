@@ -1,0 +1,109 @@
+#!/bin/sh
+set -eu
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+active_pane="${HERDR_ACTIVE_PANE_ID:-}"
+active_cwd="${HERDR_ACTIVE_PANE_CWD:-$PWD}"
+mode="${1:-}"
+
+fail() {
+  printf '%s\n' "herdr layout: $1" >&2
+  exit 1
+}
+
+case "$mode" in
+  bottom|row|column) ;;
+  *) fail "usage: herdr-reflow-panes bottom|row|column" ;;
+esac
+
+[ -n "$active_pane" ] || fail "focus a pane first"
+
+layout_json=$("$herdr_bin" pane layout --pane "$active_pane" 2>/dev/null) || \
+  fail "could not read the focused pane layout"
+workspace_id=$(printf '%s' "$layout_json" | jq -r '.result.layout.workspace_id // empty')
+old_tab=$(printf '%s' "$layout_json" | jq -r '.result.layout.tab_id // empty')
+zoomed=$(printf '%s' "$layout_json" | jq -r '.result.layout.zoomed // false')
+pane_count=$(printf '%s' "$layout_json" | jq -r '.result.layout.panes | length')
+
+[ -n "$workspace_id" ] && [ -n "$old_tab" ] || fail "incomplete pane layout"
+[ "$zoomed" != "true" ] || fail "unzoom the pane before changing the layout"
+[ "$pane_count" -ge 2 ] || fail "the tab has only one pane"
+
+old_tab_json=$("$herdr_bin" tab get "$old_tab" 2>/dev/null) || true
+old_label=$(printf '%s' "$old_tab_json" | jq -r '.result.tab.label // "1"')
+
+created=$("$herdr_bin" tab create \
+  --workspace "$workspace_id" \
+  --cwd "$active_cwd" \
+  --label rearranging \
+  --no-focus) || fail "could not create the temporary layout tab"
+new_tab=$(printf '%s' "$created" | jq -r '.result.tab.tab_id // empty')
+temporary_root=$(printf '%s' "$created" | jq -r '.result.root_pane.pane_id // empty')
+[ -n "$new_tab" ] && [ -n "$temporary_root" ] || fail "incomplete temporary tab"
+
+move_into_line() {
+  pane_ids="$1"
+  total="$2"
+  split_direction="$3"
+  top_target="$temporary_root"
+  inserted=0
+
+  printf '%s\n' "$pane_ids" | while IFS= read -r pane_id; do
+    [ -n "$pane_id" ] || continue
+    inserted=$((inserted + 1))
+    if [ "$inserted" -eq 1 ]; then
+      ratio=0.5
+    else
+      denominator=$((total - inserted + 2))
+      ratio=$(awk -v denominator="$denominator" 'BEGIN { printf "%.6f", 1 / denominator }')
+    fi
+
+    if [ "$pane_id" = "$active_pane" ]; then
+      focus_flag=--focus
+    else
+      focus_flag=--no-focus
+    fi
+
+    moved=$("$herdr_bin" pane move "$pane_id" \
+      --tab "$new_tab" \
+      --target-pane "$top_target" \
+      --split "$split_direction" \
+      --ratio "$ratio" \
+      "$focus_flag") || exit 20
+    top_target=$(printf '%s' "$moved" | jq -r '.result.move_result.pane.pane_id // empty')
+    [ -n "$top_target" ] || exit 21
+  done
+}
+
+ordered_panes=$(printf '%s' "$layout_json" |
+  jq -r '.result.layout.panes | sort_by(.rect.y, .rect.x) | .[].pane_id')
+
+if [ "$mode" = "row" ]; then
+  move_into_line "$ordered_panes" "$pane_count" right || \
+    fail "a pane could not be moved; no agent was terminated"
+elif [ "$mode" = "column" ]; then
+  move_into_line "$ordered_panes" "$pane_count" down || \
+    fail "a pane could not be moved; no agent was terminated"
+else
+  # The temporary root stays in the top half while the focused live pane moves below it.
+  focused_move=$("$herdr_bin" pane move "$active_pane" \
+    --tab "$new_tab" \
+    --target-pane "$temporary_root" \
+    --split down \
+    --ratio 0.5 \
+    --focus) || fail "the focused pane could not be moved to the bottom"
+  new_focused=$(printf '%s' "$focused_move" | jq -r '.result.move_result.pane.pane_id // empty')
+  [ -n "$new_focused" ] || fail "the focused pane moved but returned no new pane ID"
+
+  other_panes=$(printf '%s' "$ordered_panes" | awk -v active="$active_pane" '$0 != active')
+  other_count=$((pane_count - 1))
+  move_into_line "$other_panes" "$other_count" right || \
+    fail "a top-row pane could not be moved; no agent was terminated"
+fi
+
+# Removing the temporary shell promotes the live-pane layout to fill the tab.
+"$herdr_bin" pane close "$temporary_root" >/dev/null || \
+  fail "the live panes moved, but the temporary shell could not be closed"
+"$herdr_bin" tab rename "$new_tab" "$old_label" >/dev/null 2>&1 || true
+
+printf '%s\n' "herdr layout: applied $mode layout"

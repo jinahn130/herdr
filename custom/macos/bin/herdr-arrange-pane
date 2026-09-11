@@ -1,0 +1,34 @@
+#!/bin/sh
+set -eu
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+active_pane="${HERDR_ACTIVE_PANE_ID:-}"
+direction="${1:-}"
+reflow="$HOME/.local/bin/herdr-reflow-panes"
+
+[ -n "$active_pane" ] || exit 1
+
+is_side_by_side() {
+  "$herdr_bin" pane layout --pane "$active_pane" 2>/dev/null |
+    jq -e '(.result.layout.splits | length > 0) and all(.result.layout.splits[]; .direction == "right")' \
+      >/dev/null
+}
+
+case "$direction" in
+  left|right)
+    # Horizontal movement always starts from the predictable unstacked row.
+    if ! is_side_by_side; then
+      "$reflow" row >/dev/null
+    fi
+    exec "$herdr_bin" pane swap --pane "$active_pane" --direction "$direction"
+    ;;
+  down)
+    exec "$reflow" bottom
+    ;;
+  up)
+    exec "$reflow" row
+    ;;
+  *)
+    exit 2
+    ;;
+esac

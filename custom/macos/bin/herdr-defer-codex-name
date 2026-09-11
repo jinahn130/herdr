@@ -1,0 +1,44 @@
+#!/bin/zsh
+set -u
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+pane_id="${1:-}"
+expected_agent_name="${2:-}"
+chat_name="${3:-}"
+
+[[ -n "$pane_id" && -n "$expected_agent_name" && -n "$chat_name" ]] || exit 2
+
+# An untouched `codex fork` has no child thread ID yet. Keep this helper tied
+# to the exact pane and Herdr label, then synchronize the Codex title after the
+# first prompt materializes and registers the forked thread.
+for _ in {1..43200}; do
+  agent_json=$("$herdr_bin" agent get "$pane_id" 2>/dev/null) || exit 0
+  agent_kind=$(print -r -- "$agent_json" | jq -r '.result.agent.agent // empty')
+  current_name=$(print -r -- "$agent_json" | jq -r '.result.agent.name // empty')
+  [[ "$agent_kind" == "codex" && "$current_name" == "$expected_agent_name" ]] || exit 0
+
+  if session_json=$(
+    HERDR_BIN_PATH="$herdr_bin" \
+      "$HOME/.local/bin/herdr-resolve-agent-session" "$pane_id" 2>/dev/null
+  ); then
+    session_id=$(print -r -- "$session_json" | jq -r '.value // empty')
+    session_source=$(print -r -- "$session_json" | jq -r '.source // "herdr:codex"')
+    if [[ -n "$session_id" ]]; then
+      "$herdr_bin" pane report-agent-session "$pane_id" \
+        --source "$session_source" \
+        --agent codex \
+        --agent-session-id "$session_id" >/dev/null 2>&1 || true
+
+      "$HOME/.local/bin/codex-thread-set-name" \
+        "$session_id" "$chat_name" >/dev/null 2>&1 || exit 0
+
+      nohup "$HOME/.local/bin/herdr-sync-codex-live-name" \
+        "$pane_id" "$session_id" "$chat_name" >/dev/null 2>&1 &!
+      exit 0
+    fi
+  fi
+
+  sleep 2
+done
+
+exit 0

@@ -1,0 +1,108 @@
+#!/bin/sh
+set -eu
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+active_pane="${HERDR_ACTIVE_PANE_ID:-}"
+
+pause_and_fail() {
+  printf '\n%s\n' "$1" >&2
+  printf '%s' "Press Enter to close..." >&2
+  IFS= read -r _ignored || true
+  exit 1
+}
+
+if [ -z "$active_pane" ]; then
+  pause_and_fail "Focus the Claude or Codex agent whose context you want to delete first."
+fi
+
+agent_json=$("$herdr_bin" agent get "$active_pane" 2>/dev/null) || \
+  pause_and_fail "The focused pane is not a Herdr agent."
+agent_kind=$(printf '%s' "$agent_json" | jq -r '.result.agent.agent // empty')
+agent_name=$(printf '%s' "$agent_json" | jq -r '.result.agent.name // .result.agent.agent // "agent"')
+session_json=""
+session_kind=""
+session_id=""
+unsaved_codex=false
+if session_json=$(
+  HERDR_BIN_PATH="$herdr_bin" "$HOME/.local/bin/herdr-resolve-agent-session" "$active_pane" 2>/dev/null
+); then
+  session_kind=$(printf '%s' "$session_json" | jq -r '.kind // empty')
+  session_id=$(printf '%s' "$session_json" | jq -r '.value // empty')
+fi
+
+if [ "$session_kind" != "id" ] || [ -z "$session_id" ]; then
+  [ "$agent_kind" = "codex" ] || \
+    pause_and_fail "The focused pane does not expose an exact deletable agent context ID."
+
+  # If Codex has not written any thread record at all, there is no context to
+  # delete. Confirm this really is the focused Codex process, then let Option-D
+  # close the unsaved pane. Never substitute the fork parent's context ID.
+  process_json=$("$herdr_bin" pane process-info --pane "$active_pane" 2>/dev/null || true)
+  is_codex_process=$(printf '%s' "$process_json" | jq -r '
+    any(.result.process_info.foreground_processes[]?;
+      (.name == "codex") or ((.argv0 // "") | endswith("codex")))
+  ' 2>/dev/null || true)
+  [ "$is_codex_process" = "true" ] || \
+    pause_and_fail "Codex state could not be identified safely, so nothing was deleted."
+  unsaved_codex=true
+fi
+
+session_file=""
+case "$agent_kind" in
+  codex)
+    if [ "$unsaved_codex" = true ]; then
+      context_label="unsaved Codex session"
+    else
+      context_label="Codex context"
+    fi
+    ;;
+  claude|claude-code)
+    context_label="Claude transcript"
+    session_file=$(
+      rg --files "$HOME/.claude/projects" 2>/dev/null |
+        rg "/${session_id}\\.jsonl$" |
+        head -1
+    )
+    if [ -n "$session_file" ]; then
+      context_label="Claude transcript"
+    else
+      # A just-moved Claude pane can have a live session ID before Claude has
+      # written its first JSONL file. There is no stored transcript to delete;
+      # closing the pane is still the requested discard operation.
+      context_label="unsaved Claude session"
+    fi
+    ;;
+  *)
+    pause_and_fail "Option-D only deletes Claude or Codex agent contexts."
+    ;;
+esac
+
+printf 'Delete agent "%s" and its %s? [y/N] ' "$agent_name" "$context_label"
+IFS= read -r answer || answer=""
+
+case "$answer" in
+  y|Y|yes|YES|Yes) ;;
+  *) exit 0 ;;
+esac
+
+"$herdr_bin" pane close "$active_pane" >/dev/null
+
+# Let the pane's Codex process exit before removing its saved context.
+attempt=0
+while "$herdr_bin" pane get "$active_pane" >/dev/null 2>&1 && [ "$attempt" -lt 50 ]; do
+  sleep 0.1
+  attempt=$((attempt + 1))
+done
+
+case "$agent_kind" in
+  codex)
+    if [ "$unsaved_codex" = false ] && ! codex delete --force "$session_id" >/dev/null 2>&1; then
+      pause_and_fail "The agent pane was closed, but Codex could not delete context $session_id."
+    fi
+    ;;
+  claude|claude-code)
+    if [ -n "$session_file" ]; then
+      rm -f -- "$session_file"
+    fi
+    ;;
+esac

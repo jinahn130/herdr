@@ -1,0 +1,223 @@
+# macOS-only workflow configuration. Install with
+# custom/macos/Install-HerdrCustomization.sh --apply-config.
+# `$HOME` is expanded by the shell that runs custom key commands.
+
+onboarding = false
+
+[theme]
+name = "catppuccin"
+
+[keys]
+# Direct shortcuts plus prefix-based fallbacks.
+focus_agent = ["alt+1..9", "prefix+alt+1..9"]
+previous_agent = ["ctrl+alt+left", "prefix+alt+left"]
+next_agent = ["ctrl+alt+right", "prefix+alt+right"]
+previous_tab = ["alt+minus", "prefix+p"]
+next_tab = ["alt+plus", "alt+=", "alt+shift+=", "prefix+n"]
+switch_tab = ["cmd+shift+1..9", "prefix+1..9"]
+rename_tab = ["alt+shift+t", "prefix+shift+t"]
+new_workspace = ["alt+w", "prefix+shift+n"]
+new_worktree = ["alt+g", "prefix+shift+g"]
+copy_mode = ["alt+s", "prefix+["]
+resize_mode = ["alt+r", "prefix+r"]
+previous_workspace = "alt+p"
+next_workspace = "alt+n"
+switch_workspace = ["alt+shift+1..9", "prefix+shift+1..9"]
+
+[ui]
+mouse_capture = true
+mouse_scroll_lines = 6
+pane_scrollbars = true
+done_acknowledgement = "pane"
+
+# Show both Herdr's agent label and Codex's /rename session title.
+[ui.sidebar.agents]
+rows = [
+  ["state_icon", "agent", "state_text", { token = "$backlog", fg = "#ff5f5f", bold = true }],
+  ["terminal_title_stripped"],
+]
+
+# Rename the focused Herdr agent without looking up w1:p1-style IDs.
+[[keys.command]]
+key = "ctrl+alt+a"
+type = "popup"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-rename-agent"
+description = "rename focused agent"
+width = 50
+height = 7
+
+# Mac-friendly duplicate for renaming the focused agent.
+[[keys.command]]
+key = "cmd+l"
+type = "popup"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-rename-agent"
+description = "rename focused agent"
+width = 50
+height = 7
+
+[[keys.command]]
+key = "alt+b"
+type = "shell"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-toggle-backlog"
+description = "toggle the focused agent's manual BACKLOG tag"
+
+[[keys.command]]
+key = "alt+slash"
+type = "shell"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-toggle-codex-fast"
+description = "toggle Fast mode in the focused idle Codex agent"
+
+[[keys.command]]
+key = "alt+t"
+type = "popup"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-move-pane-next-tab"
+description = "choose a destination tab for the focused pane"
+width = 64
+height = 20
+
+[[keys.command]]
+key = "alt+l"
+type = "popup"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-toggle-last-prompt"
+description = "open readable sent-prompt history for the focused agent"
+width = "85%"
+height = "60%"
+
+[[keys.command]]
+key = "cmd+period"
+type = "popup"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-toggle-last-prompt"
+description = "open readable sent-prompt history for the focused agent"
+width = "85%"
+height = "60%"
+
+[[keys.command]]
+key = "alt+a"
+type = "popup"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-add-codex"
+description = "add a fresh Codex agent"
+width = 64
+height = 9
+
+[[keys.command]]
+key = "alt+c"
+type = "popup"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-add-claude"
+description = "choose Fable 5.1 or another model and add a fresh Claude agent"
+width = 70
+height = 15
+
+[[keys.command]]
+key = "alt+h"
+type = "popup"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-read-chat"
+description = "read focused agent chat history"
+width = "90%"
+height = "90%"
+
+[advanced]
+scrollback_limit_bytes = 50000000
+
+[[keys.command]]
+key = "alt+f"
+type = "shell"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-fork-agent right"
+description = "fork the focused Codex or Claude context into a pane on the right"
+
+[[keys.command]]
+key = "ctrl+alt+f"
+type = "popup"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-fork-direction"
+description = "fork focused context into a directional pane"
+width = 64
+height = 12
+
+[[keys.command]]
+key = "ctrl+alt+shift+f"
+type = "shell"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-fork-codex-to-claude"
+description = "transfer the focused Codex context into Claude Fable 5.1 on the right"
+
+[[keys.command]]
+key = "alt+shift+f"
+type = "popup"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-fork-worktree-codex"
+description = "fork focused context into an isolated Git worktree"
+width = 76
+height = 12
+
+[[keys.command]]
+key = "alt+e"
+type = "shell"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-open-codex-context resume"
+description = "open an existing Codex context in a new pane"
+
+[[keys.command]]
+key = "alt+shift+e"
+type = "shell"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-open-codex-context fork"
+description = "fork an existing Codex context in a new pane"
+
+[[keys.command]]
+key = "alt+d"
+type = "popup"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-delete-codex-context"
+description = "permanently delete focused Claude or Codex context and close agent pane"
+width = 78
+height = 16
+
+[[keys.command]]
+key = "alt+shift+d"
+type = "popup"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-delete-codex-context"
+description = "permanently delete focused Claude or Codex context and close agent"
+width = 78
+height = 16
+
+[[keys.command]]
+key = "alt+shift+left"
+type = "shell"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-size-pane width shrink"
+description = "make focused pane narrower"
+
+[[keys.command]]
+key = "alt+shift+down"
+type = "shell"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-size-pane height grow"
+description = "make focused pane taller"
+
+[[keys.command]]
+key = "alt+shift+up"
+type = "shell"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-size-pane height shrink"
+description = "make focused pane shorter"
+
+[[keys.command]]
+key = "alt+shift+right"
+type = "shell"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-size-pane width grow"
+description = "make focused pane wider"
+
+[[keys.command]]
+key = "ctrl+alt+shift+left"
+type = "shell"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-arrange-pane left"
+description = "unstack and move focused pane left"
+
+[[keys.command]]
+key = "ctrl+alt+shift+right"
+type = "shell"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-arrange-pane right"
+description = "unstack and move focused pane right"
+
+[[keys.command]]
+key = "ctrl+alt+shift+down"
+type = "shell"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-arrange-pane down"
+description = "stack focused pane across the bottom"
+
+[[keys.command]]
+key = "ctrl+alt+shift+up"
+type = "shell"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-arrange-pane up"
+description = "unstack panes into a side-by-side row"

@@ -1,5 +1,9 @@
 # Windows Herdr customization handoff
 
+For an AI agent performing the actual corporate-Windows installation and
+validation, begin with `AGENT-HANDOFF.md`. This document remains the detailed
+platform reference.
+
 This directory is a Windows-only port of the high-frequency Herdr workflow used
 on macOS. Nothing here activates on macOS. The installer refuses to run unless
 `OS=Windows_NT`, and Herdr only reads the template after it is copied to
@@ -191,3 +195,8 @@ git rebase upstream/master
 Resolve source conflicts carefully, rerun validation, and reinstall the helper
 scripts. Never replace `%APPDATA%\herdr\config.toml` during an update without
 keeping its backup.
+
+Git is the manual synchronization mechanism; this setup intentionally has no
+automatic GitHub Actions deployment. After pulling a workflow update, rerun
+`Install-HerdrCustomization.ps1` to refresh helpers. Add `-ApplyConfig` only
+when the tracked Windows key map changed and its diff has been reviewed.

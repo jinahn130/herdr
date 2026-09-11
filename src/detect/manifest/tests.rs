@@ -677,7 +677,7 @@ fn claude_idle_prompt_with_background_shell_is_idle() {
         result.matched_rule.as_ref().map(|rule| rule.id.as_str()),
         Some("live_prompt_box")
     );
-    assert!(result.visible_idle);
+    assert!(!result.visible_idle);
     assert!(!result.visible_working);
 }
 
@@ -715,6 +715,35 @@ fn claude_live_turn_with_background_shell_remains_working() {
         Some("live_turn_working")
     );
     assert!(result.visible_working);
+}
+
+#[test]
+fn claude_live_turn_with_named_thinking_effort_remains_working() {
+    // Captured from Claude Code while an xhigh-effort turn was still active.
+    // The input prompt is visible during the turn, so the spinner must outrank
+    // the idle prompt rule instead of flickering between working and done.
+    for status in [
+        "thinking with xhigh effort",
+        "thinking more with xhigh effort",
+    ] {
+        let screen = format!(
+            "✻ Topsy-turvying… ({status})\n\n\
+             ────────────────────────────────────────────────────────────────\n\
+             ❯\n\
+             ────────────────────────────────────────────────────────────────\n\
+               ⏵⏵ bypass permissions on (shift+tab to cycle) · esc t…\n"
+        );
+        let result = osc_explain(Agent::Claude, &screen, "", "");
+
+        assert_eq!(result.state, AgentState::Working, "{status}");
+        assert_eq!(
+            result.matched_rule.as_ref().map(|rule| rule.id.as_str()),
+            Some("live_turn_working"),
+            "{status}"
+        );
+        assert!(result.visible_working, "{status}");
+        assert!(!result.visible_idle, "{status}");
+    }
 }
 
 #[test]
@@ -865,6 +894,22 @@ fn claude_osc_title_half_circle_frames_are_working() {
         );
         assert!(result.visible_working, "frame {frame}");
     }
+}
+
+#[test]
+fn claude_osc_title_active_tool_is_working() {
+    let result = osc_explain(Agent::Claude, "", "[...] ops-monitor: Bash · gecko", "");
+    assert_eq!(result.state, AgentState::Working);
+    assert_eq!(
+        result.matched_rule.as_ref().map(|rule| rule.id.as_str()),
+        Some("osc_title_working")
+    );
+    assert!(result.visible_working);
+
+    let idle = osc_explain(Agent::Claude, "", "[...] ops-monitor · gecko", "");
+    assert_eq!(idle.state, AgentState::Idle);
+    assert_eq!(idle.matched_rule, None);
+    assert!(!idle.visible_working);
 }
 
 #[test]

@@ -1,0 +1,102 @@
+#!/bin/sh
+set -eu
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+active_pane="${HERDR_ACTIVE_PANE_ID:-}"
+active_workspace="${HERDR_ACTIVE_WORKSPACE_ID:-}"
+active_cwd="${HERDR_ACTIVE_PANE_CWD:-$PWD}"
+placement="${1:-right}"
+
+if [ -z "$active_pane" ]; then
+  printf '%s\n' "No focused Herdr agent was found." >&2
+  exit 1
+fi
+
+agent_json=$("$herdr_bin" agent get "$active_pane")
+agent_kind=$(printf '%s' "$agent_json" | jq -r '.result.agent.agent // empty')
+
+case "$agent_kind" in
+  codex|claude) ;;
+  *)
+    printf '%s\n' "Option-F can fork a focused Codex or Claude agent." >&2
+    exit 1
+    ;;
+esac
+
+session_json=$(
+  HERDR_BIN_PATH="$herdr_bin" "$HOME/.local/bin/herdr-resolve-agent-session" "$active_pane" 2>/dev/null
+) || session_json=""
+session_id=$(printf '%s' "$session_json" | jq -r '.value // empty' 2>/dev/null || true)
+
+if [ -z "$session_id" ]; then
+  printf '%s\n' "The focused $agent_kind agent has no resumable session yet." >&2
+  exit 1
+fi
+
+case "$placement" in
+  tab)
+    if [ -z "$active_workspace" ]; then
+      printf '%s\n' "No active Herdr workspace was found." >&2
+      exit 1
+    fi
+    created_json=$("$herdr_bin" tab create \
+      --workspace "$active_workspace" \
+      --cwd "$active_cwd" \
+      --label "fork" \
+      --focus)
+    new_pane=$(printf '%s' "$created_json" | jq -r '.result.root_pane.pane_id // empty')
+    ;;
+  right|down)
+    created_json=$("$herdr_bin" pane split "$active_pane" --direction "$placement" --focus)
+    new_pane=$(printf '%s' "$created_json" | jq -r '.result.pane.pane_id // empty')
+    ;;
+  *)
+    printf '%s\n' "Usage: herdr-fork-agent [tab|right|down]" >&2
+    exit 2
+    ;;
+esac
+
+if [ -z "$new_pane" ]; then
+  printf '%s\n' "Herdr could not create the destination pane." >&2
+  exit 1
+fi
+
+agent_name="${agent_kind}-fork-$(date +%H%M%S)"
+# A newly split login shell needs a moment before Herdr can replace it.
+sleep 1
+
+if [ "$agent_kind" = "codex" ]; then
+  "$herdr_bin" agent start "$agent_name" \
+    --kind codex \
+    --pane "$new_pane" \
+    --timeout 60000 \
+    -- \
+    --no-alt-screen \
+    --dangerously-bypass-approvals-and-sandbox \
+    fork "$session_id" >/dev/null
+
+  # Codex forks sometimes expose the new UUID in their terminal title before
+  # the native Herdr hook records it. Resolve the verified ID and register it.
+  if fork_session_json=$(
+    HERDR_BIN_PATH="$herdr_bin" "$HOME/.local/bin/herdr-resolve-agent-session" "$new_pane" 2>/dev/null
+  ); then
+    fork_session_id=$(printf '%s' "$fork_session_json" | jq -r '.value // empty')
+    fork_session_source=$(printf '%s' "$fork_session_json" | jq -r '.source // "herdr:codex"')
+    if [ -n "$fork_session_id" ]; then
+      "$herdr_bin" pane report-agent-session "$new_pane" \
+        --source "$fork_session_source" \
+        --agent codex \
+        --agent-session-id "$fork_session_id" >/dev/null
+    fi
+  fi
+  exit 0
+fi
+
+exec "$herdr_bin" agent start "$agent_name" \
+  --kind claude \
+  --pane "$new_pane" \
+  --timeout 60000 \
+  -- \
+  --dangerously-skip-permissions \
+  --resume "$session_id" \
+  --fork-session

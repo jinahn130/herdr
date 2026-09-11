@@ -1,0 +1,122 @@
+#!/bin/zsh
+set -eu
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+active_pane="${HERDR_ACTIVE_PANE_ID:-}"
+active_workspace="${HERDR_ACTIVE_WORKSPACE_ID:-}"
+active_tab="${HERDR_ACTIVE_TAB_ID:-}"
+
+[ -n "$active_pane" ] || {
+  printf '%s\n' "No focused Herdr pane was found." >&2
+  exit 1
+}
+
+if [ -z "$active_workspace" ] || [ -z "$active_tab" ]; then
+  pane_json=$("$herdr_bin" pane get "$active_pane")
+  active_workspace=$(printf '%s' "$pane_json" | jq -r '.result.pane.workspace_id // empty')
+  active_tab=$(printf '%s' "$pane_json" | jq -r '.result.pane.tab_id // empty')
+fi
+
+[ -n "$active_workspace" ] && [ -n "$active_tab" ] || {
+  printf '%s\n' "Herdr could not identify the focused tab." >&2
+  exit 1
+}
+
+# Capture native session identity before moving; Herdr can otherwise lose this
+# metadata even though the terminal process itself survives the move.
+session_json=$(
+  HERDR_BIN_PATH="$herdr_bin" "$HOME/.local/bin/herdr-resolve-agent-session" "$active_pane" 2>/dev/null
+) || session_json=""
+
+tabs_json=$("$herdr_bin" tab list --workspace "$active_workspace")
+tab_count=$(printf '%s' "$tabs_json" | jq -r '.result.tabs | length')
+shown_count=$tab_count
+(( shown_count > 9 )) && shown_count=9
+
+print -r -- "MOVE THIS PANE TO A TAB"
+print -r -- ""
+
+i=0
+while (( i < shown_count )); do
+  tab_id=$(printf '%s' "$tabs_json" | jq -r --argjson index "$i" '.result.tabs[$index].tab_id')
+  tab_label=$(printf '%s' "$tabs_json" | jq -r --argjson index "$i" '.result.tabs[$index].label')
+  marker=" "
+  [[ "$tab_id" == "$active_tab" ]] && marker="•"
+  printf '  %d  %-24s %s\n' "$((i + 1))" "$tab_label" "$marker"
+  i=$((i + 1))
+done
+
+if (( tab_count > 9 )); then
+  print -r -- "  Only the first 9 tabs are shown."
+fi
+print -r -- "  N  Create a new named tab"
+print -r -- ""
+print -r -- "  • is the current tab · Esc cancels"
+print -r -- ""
+print -n -- "Choose: "
+
+choice=""
+read -rs -k 1 choice
+print
+
+case "$choice" in
+  $'\e') exit 0 ;;
+  n|N)
+    new_label="moved"
+    if agent_json=$("$herdr_bin" agent get "$active_pane" 2>/dev/null); then
+      agent_label=$(printf '%s' "$agent_json" | jq -r '.result.agent.name // .result.agent.agent // empty')
+      [[ -n "$agent_label" ]] && new_label="$agent_label"
+    fi
+
+    bindkey -e
+    cancel_new_tab() { zle send-break }
+    zle -N cancel_new_tab
+    bindkey '^[' cancel_new_tab
+    if ! vared -p "New tab name: " new_label; then
+      exit 0
+    fi
+    [[ -n "$new_label" ]] || exit 0
+
+    move_json=$("$herdr_bin" pane move "$active_pane" \
+      --new-tab \
+      --workspace "$active_workspace" \
+      --label "$new_label" \
+      --focus)
+    ;;
+  [1-9])
+    selected_index=$((choice - 1))
+    (( selected_index < tab_count )) || {
+      print -r -- "That tab does not exist."
+      sleep 1
+      exit 1
+    }
+    selected_tab=$(printf '%s' "$tabs_json" | jq -r --argjson index "$selected_index" '.result.tabs[$index].tab_id')
+    if [[ "$selected_tab" == "$active_tab" ]]; then
+      exit 0
+    fi
+    move_json=$("$herdr_bin" pane move "$active_pane" \
+      --tab "$selected_tab" \
+      --split right \
+      --focus)
+    ;;
+  *)
+    print -r -- "Press a displayed number, N, or Esc."
+    sleep 1
+    exit 1
+    ;;
+esac
+
+moved_pane=$(printf '%s' "$move_json" | jq -r '.result.move_result.pane.pane_id // empty')
+[ -n "$moved_pane" ] || moved_pane="$active_pane"
+
+if [ -n "$session_json" ]; then
+  session_agent=$(printf '%s' "$session_json" | jq -r '.agent // empty')
+  session_id=$(printf '%s' "$session_json" | jq -r '.value // empty')
+  session_source=$(printf '%s' "$session_json" | jq -r '.source // empty')
+  if [ -n "$session_agent" ] && [ -n "$session_id" ] && [ -n "$session_source" ]; then
+    "$herdr_bin" pane report-agent-session "$moved_pane" \
+      --source "$session_source" \
+      --agent "$session_agent" \
+      --agent-session-id "$session_id" >/dev/null
+  fi
+fi

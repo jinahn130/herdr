@@ -1,0 +1,34 @@
+#!/bin/zsh
+set -eu
+
+print -r -- "FORK THIS CODEX CONTEXT"
+print -r -- ""
+print -r -- "  →   new pane on the right"
+print -r -- "  ↓   new pane on the bottom"
+print -r -- "  Esc cancel"
+print -r -- ""
+print -n -- "Choose with an arrow: "
+
+key=""
+rest=""
+read -rs -k 1 key
+
+if [[ "$key" == $'\e' ]]; then
+  if ! read -rs -t 0.3 -k 2 rest; then
+    print
+    exit 0
+  fi
+fi
+
+print
+case "$key$rest" in
+  $'\e[C') placement="right" ;;
+  $'\e[B') placement="down" ;;
+  *)
+    print -r -- "Use the Right or Down arrow."
+    sleep 1
+    exit 1
+    ;;
+esac
+
+exec "$HOME/.local/bin/herdr-fork-codex" "$placement"

@@ -1,0 +1,13 @@
+#!/bin/sh
+set -eu
+
+prompt_history="${HERDR_PROMPT_HISTORY:-$HOME/.local/bin/herdr-prompt-history}"
+prompt_viewer="${HERDR_PROMPT_VIEWER:-$HOME/.local/bin/herdr-prompt-viewer}"
+history_file=$(mktemp "${TMPDIR:-/tmp}/herdr-prompt-history.XXXXXX")
+trap 'rm -f "$history_file"' EXIT HUP INT TERM
+
+"$prompt_history" >"$history_file"
+
+HERDR_PROMPT_VIEWER_MODE=history \
+HERDR_PROMPT_VIEWER_TITLE="PROMPT HISTORY · C copies selected · Option-L or Esc closes" \
+  "$prompt_viewer" "$history_file"

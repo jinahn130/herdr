@@ -1,0 +1,37 @@
+#!/bin/sh
+set -eu
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+active_pane="${HERDR_ACTIVE_PANE_ID:-}"
+
+notify() {
+  "$herdr_bin" notification show "$1" --body "$2" >/dev/null 2>&1 || true
+}
+
+if [ -z "$active_pane" ]; then
+  notify "Fast mode not changed" "Focus a Codex pane first."
+  exit 1
+fi
+
+agent_json=$("$herdr_bin" agent get "$active_pane" 2>/dev/null) || {
+  notify "Fast mode not changed" "The focused pane is not a recognized agent."
+  exit 1
+}
+
+agent_kind=$(printf '%s' "$agent_json" | jq -r '.result.agent.agent // empty')
+agent_status=$(printf '%s' "$agent_json" | jq -r '.result.agent.agent_status // empty')
+interactive_ready=$(printf '%s' "$agent_json" | jq -r '.result.agent.interactive_ready // false')
+
+if [ "$agent_kind" != "codex" ]; then
+  notify "Fast mode not changed" "Option-/ only applies to Codex agents."
+  exit 1
+fi
+
+if [ "$agent_status" != "idle" ] || [ "$interactive_ready" != "true" ]; then
+  notify "Fast mode not changed" "Wait until the focused Codex agent is idle."
+  exit 1
+fi
+
+# Existing agents may predate Codex's native keymap setting. Submitting the
+# slash command works for both old and new Codex processes.
+"$herdr_bin" pane run "$active_pane" /fast >/dev/null

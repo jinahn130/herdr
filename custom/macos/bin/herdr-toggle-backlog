@@ -1,0 +1,37 @@
+#!/bin/sh
+set -eu
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+active_pane="${HERDR_ACTIVE_PANE_ID:-}"
+state_dir="${XDG_CONFIG_HOME:-$HOME/.config}/herdr/manual-backlog"
+
+if [ -z "$active_pane" ]; then
+  printf '%s\n' "Focus a Herdr agent first." >&2
+  exit 1
+fi
+
+agent_json=$("$herdr_bin" agent get "$active_pane")
+identity=$(printf '%s' "$agent_json" | jq -r '.result.agent.agent_session.value // .result.agent.terminal_id // empty')
+agent_name=$(printf '%s' "$agent_json" | jq -r '.result.agent.name // .result.agent.agent // "agent"')
+
+if [ -z "$identity" ]; then
+  printf '%s\n' "Herdr could not identify the focused agent." >&2
+  exit 1
+fi
+
+mkdir -p "$state_dir"
+marker="$state_dir/$identity"
+
+if [ -e "$marker" ]; then
+  "$herdr_bin" pane report-metadata "$active_pane" \
+    --source manual-backlog \
+    --clear-token backlog >/dev/null
+  rm "$marker"
+  "$herdr_bin" notification show "BACKLOG cleared" --body "$agent_name" >/dev/null
+else
+  "$herdr_bin" pane report-metadata "$active_pane" \
+    --source manual-backlog \
+    --token backlog=BACKLOG >/dev/null
+  touch "$marker"
+  "$herdr_bin" notification show "Marked BACKLOG" --body "$agent_name" >/dev/null
+fi

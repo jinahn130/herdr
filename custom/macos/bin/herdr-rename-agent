@@ -1,0 +1,108 @@
+#!/bin/zsh
+set -u
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+active_pane="${HERDR_ACTIVE_PANE_ID:-}"
+
+if [[ -z "$active_pane" ]]; then
+  print -r -- "Focus a Herdr agent first."
+  sleep 1
+  exit 1
+fi
+
+agent_json=$("$herdr_bin" agent get "$active_pane" 2>/dev/null) || {
+  print -r -- "The focused pane is not a Herdr agent."
+  sleep 1
+  exit 1
+}
+
+current_name=$(print -r -- "$agent_json" | jq -r '.result.agent.name // empty')
+agent_kind=$(print -r -- "$agent_json" | jq -r '.result.agent.agent // empty')
+session_id=$(print -r -- "$agent_json" | jq -r '.result.agent.agent_session.value // empty')
+new_name="$current_name"
+
+# Use ZLE so the existing name is editable in place. Esc aborts vared and exits
+# without calling `agent rename`.
+bindkey -e
+cancel_agent_rename() { zle send-break }
+zle -N cancel_agent_rename
+bindkey '^[' cancel_agent_rename
+
+if ! vared -p "Agent name: " new_name; then
+  exit 0
+fi
+
+if [[ -n "$new_name" ]] && ! print -r -- "$new_name" | grep -Eq '^[a-z][a-z0-9_-]{0,31}$'; then
+  print -r -- "Use 1-32 lowercase letters, numbers, _ or -; start with a letter."
+  sleep 2
+  exit 1
+fi
+
+rename_agent() {
+  if [[ -z "$new_name" ]]; then
+    "$herdr_bin" agent rename "$active_pane" --clear 2>&1
+  else
+    "$herdr_bin" agent rename "$active_pane" "$new_name" 2>&1
+  fi
+}
+
+rename_response=""
+rename_status=0
+if [[ "$new_name" != "$current_name" ]]; then
+  rename_response=$(rename_agent)
+  rename_status=$?
+fi
+
+# A fresh Option-F fork appears in Herdr before `agent start` has finished
+# attaching the new Codex/Claude session. Herdr intentionally rejects rename
+# requests during that short launch window. Keep the user's requested name and
+# apply it as soon as the agent becomes renameable instead of reporting a
+# misleading validation error.
+if (( rename_status != 0 )); then
+  error_code=$(print -r -- "$rename_response" | jq -r '.error.code // empty' 2>/dev/null)
+  if [[ "$error_code" == "agent_launch_pending" ]]; then
+    print -r -- "Finishing fork setup; the name will save automatically..."
+    for _ in {1..70}; do
+      sleep 1
+      agent_json=$("$herdr_bin" agent get "$active_pane" 2>/dev/null) || break
+      launch_pending=$(print -r -- "$agent_json" | jq -r '.result.agent.launch_pending // false')
+      [[ "$launch_pending" == "true" ]] && continue
+      rename_response=$(rename_agent)
+      rename_status=$?
+      break
+    done
+  fi
+fi
+
+if (( rename_status != 0 )); then
+  error_message=$(print -r -- "$rename_response" | jq -r '.error.message // empty' 2>/dev/null)
+  [[ -z "$error_message" ]] && error_message="Herdr could not rename this agent."
+  print -r -- "$error_message"
+  sleep 2
+  exit 1
+fi
+
+# Herdr's agent label and Codex's saved chat title are separate values. Keep
+# them synchronized so Control-Option-A also changes what `codex resume` and
+# the Codex TUI consider the chat name. This does not interrupt a running turn.
+if [[ "$agent_kind" == "codex" && -n "$new_name" ]]; then
+  if [[ -z "$session_id" ]]; then
+    # Codex intentionally delays creating a fork's child thread until its first
+    # prompt. The Herdr label is already saved, so finish successfully and let
+    # a pane-bound helper synchronize the Codex title when that ID appears.
+    nohup "$HOME/.local/bin/herdr-defer-codex-name" \
+      "$active_pane" "$new_name" "$new_name" >/dev/null 2>&1 &!
+    exit 0
+  fi
+
+  if ! "$HOME/.local/bin/codex-thread-set-name" "$session_id" "$new_name"; then
+    print -r -- "Herdr saved the label, but Codex could not save the chat name."
+    sleep 2
+    exit 1
+  fi
+
+  # Also refresh the already-running TUI's in-memory title. The helper waits
+  # for an active turn to finish before issuing Codex's native /rename command.
+  nohup "$HOME/.local/bin/herdr-sync-codex-live-name" \
+    "$active_pane" "$session_id" "$new_name" >/dev/null 2>&1 &!
+fi

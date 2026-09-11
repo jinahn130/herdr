@@ -1,0 +1,126 @@
+#!/bin/sh
+set -eu
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+pane_id="${1:-${HERDR_ACTIVE_PANE_ID:-}}"
+
+[ -n "$pane_id" ] || exit 1
+
+agent_json=$("$herdr_bin" agent get "$pane_id" 2>/dev/null) || exit 1
+agent_kind=$(printf '%s' "$agent_json" | jq -r '.result.agent.agent // empty')
+session_kind=$(printf '%s' "$agent_json" | jq -r '.result.agent.agent_session.kind // empty')
+session_id=$(printf '%s' "$agent_json" | jq -r '.result.agent.agent_session.value // empty')
+session_source=$(printf '%s' "$agent_json" | jq -r '.result.agent.agent_session.source // empty')
+
+case "$agent_kind" in
+  codex|claude|claude-code) ;;
+  *) exit 1 ;;
+esac
+
+if [ "$session_kind" != "id" ] || [ -z "$session_id" ]; then
+  [ "$agent_kind" = "codex" ] || exit 1
+
+  terminal_title=$(printf '%s' "$agent_json" | jq -r '.result.agent.terminal_title_stripped // .result.agent.terminal_title // empty')
+  session_id=$(
+    printf '%s\n' "$terminal_title" |
+      sed -nE 's/.*\| ([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}) \|.*/\1/p' |
+      head -1
+  )
+
+  state_db="$HOME/.codex/state_5.sqlite"
+  thread_record=""
+  if [ -n "$session_id" ] && [ -f "$state_db" ] && command -v sqlite3 >/dev/null 2>&1; then
+    thread_record=$(sqlite3 -noheader "file:${state_db}?mode=ro" \
+      "SELECT id FROM threads WHERE id = '${session_id}' LIMIT 1;" 2>/dev/null || true)
+  fi
+
+  # Codex 5.6-era fork panes can start before the native Herdr hook reports
+  # their child thread ID. Recover it from two exact facts recorded by Codex:
+  # the fork parent in argv and the child rollout's forked_from_id. Match the
+  # rollout creation time to this pane's Codex process start so parallel forks
+  # from the same parent cannot be confused.
+  if [ -z "$thread_record" ] && [ -f "$state_db" ] && command -v sqlite3 >/dev/null 2>&1; then
+    process_json=$("$herdr_bin" pane process-info --pane "$pane_id" 2>/dev/null || true)
+    process_line=$(printf '%s' "$process_json" | jq -r '
+      .result.process_info.foreground_processes[]?
+      | select((.name == "codex") or ((.argv0 // "") | endswith("codex")))
+      | (.argv // []) as $argv
+      | ($argv | index("fork")) as $fork_index
+      | select($fork_index != null and ($fork_index + 1) < ($argv | length))
+      | [.pid, $argv[$fork_index + 1]] | @tsv
+    ' 2>/dev/null | head -1)
+
+    process_pid=$(printf '%s\n' "$process_line" | cut -f1)
+    fork_parent=$(printf '%s\n' "$process_line" | cut -f2)
+    case "$fork_parent" in
+      ????????-????-????-????-????????????) ;;
+      *) fork_parent="" ;;
+    esac
+
+    process_start=""
+    if [ -n "$process_pid" ] && [ -n "$fork_parent" ]; then
+      process_start_text=$(LC_ALL=C ps -p "$process_pid" -o lstart= 2>/dev/null | sed 's/^ *//;s/ *$//')
+      if [ -n "$process_start_text" ]; then
+        process_start=$(LC_ALL=C date -j -f "%a %b %e %T %Y" \
+          "$process_start_text" "+%s" 2>/dev/null || true)
+      fi
+    fi
+
+    if [ -n "$process_start" ]; then
+      pane_cwd=$(printf '%s' "$agent_json" | jq -r '.result.agent.cwd // empty')
+      sql_cwd=$(printf '%s' "$pane_cwd" | sed "s/'/''/g")
+      start_ms=$((process_start * 1000))
+      lower_ms=$((start_ms - 30000))
+      upper_ms=$((start_ms + 30000))
+      session_id=$(
+        sqlite3 -noheader -separator '|' "file:${state_db}?mode=ro" \
+          "SELECT id, rollout_path, created_at_ms FROM threads
+             WHERE cwd = '${sql_cwd}'
+               AND created_at_ms BETWEEN ${lower_ms} AND ${upper_ms};" 2>/dev/null |
+        while IFS='|' read -r candidate_id candidate_path candidate_ms; do
+          [ -f "$candidate_path" ] || continue
+          candidate_match=$(sed -n '1p' "$candidate_path" | jq -r \
+            --arg id "$candidate_id" --arg parent "$fork_parent" \
+            'select(.type == "session_meta")
+             | select(.payload.id == $id and .payload.forked_from_id == $parent)
+             | .payload.id' 2>/dev/null || true)
+          [ "$candidate_match" = "$candidate_id" ] || continue
+          delta=$((candidate_ms - start_ms))
+          [ "$delta" -ge 0 ] || delta=$((-delta))
+          printf '%020d|%s\n' "$delta" "$candidate_id"
+        done |
+        sort -n |
+        head -1 |
+        cut -d'|' -f2
+      )
+      if [ -n "$session_id" ]; then
+        thread_record=$(sqlite3 -noheader "file:${state_db}?mode=ro" \
+          "SELECT id FROM threads WHERE id = '${session_id}' LIMIT 1;" 2>/dev/null || true)
+      fi
+    fi
+  fi
+
+  [ -n "$session_id" ] && [ "$thread_record" = "$session_id" ] || exit 1
+
+  # Accept only an exact Codex record. The rollout path may be absent after a
+  # storage migration, so the state database is the durable authority.
+  session_file=$(
+    rg --files \
+      "$HOME/.codex/sessions" \
+      "$HOME/.codex/archived_sessions" 2>/dev/null |
+      rg "/[^/]*-${session_id}\\.jsonl$" |
+      head -1
+    )
+
+  session_kind="id"
+  session_source="herdr:codex"
+fi
+
+[ -n "$session_source" ] || session_source="herdr:${agent_kind}"
+
+jq -cn \
+  --arg agent "$agent_kind" \
+  --arg kind "$session_kind" \
+  --arg value "$session_id" \
+  --arg source "$session_source" \
+  '{agent: $agent, kind: $kind, value: $value, source: $source}'

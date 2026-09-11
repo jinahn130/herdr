@@ -1,0 +1,61 @@
+#!/bin/zsh
+set -eu
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+active_pane="${HERDR_ACTIVE_PANE_ID:-}"
+
+if [[ -z "$active_pane" ]]; then
+  print -u2 -r -- "No focused Herdr pane was found."
+  exit 1
+fi
+
+print -r -- "START A CLAUDE AGENT"
+print -r -- ""
+print -r -- "  F  Fable 5.1     hardest, long autonomous work"
+print -r -- "  O  Opus 5 (1M)   complex reasoning, long context"
+print -r -- "  S  Sonnet 5       everyday coding"
+print -r -- "  H  Haiku          quickest simple tasks"
+print -r -- ""
+print -r -- "  Esc cancel"
+print -r -- ""
+print -n -- "Choose a model: "
+
+choice=""
+read -rs -k 1 choice
+print
+
+case "$choice" in
+  f|F) model="fable"; model_label="fable-5-1" ;;
+  o|O) model="opus[1m]"; model_label="opus" ;;
+  s|S) model="sonnet"; model_label="sonnet" ;;
+  h|H) model="haiku"; model_label="haiku" ;;
+  $'\e') exit 0 ;;
+  *)
+    print -u2 -r -- "Press F, O, S, or H."
+    sleep 1
+    exit 1
+    ;;
+esac
+
+target_pane="$active_pane"
+if "$herdr_bin" agent get "$active_pane" >/dev/null 2>&1; then
+  split_json=$("$herdr_bin" pane split "$active_pane" --direction right --focus)
+  target_pane=$(printf '%s' "$split_json" | jq -r '.result.pane.pane_id // empty')
+  if [[ -z "$target_pane" ]]; then
+    print -u2 -r -- "Herdr created no new pane."
+    exit 1
+  fi
+fi
+
+agent_name="claude-${model_label}-$(date +%H%M%S)"
+print -r -- "Starting ${agent_name} with full access..."
+
+# A newly split login shell needs a moment before Herdr can replace it.
+sleep 1
+exec "$herdr_bin" agent start "$agent_name" \
+  --kind claude \
+  --pane "$target_pane" \
+  --timeout 60000 \
+  -- \
+  --dangerously-skip-permissions \
+  --model "$model"

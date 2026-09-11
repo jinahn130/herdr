@@ -1,0 +1,124 @@
+#!/bin/sh
+set -eu
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+active_pane="${HERDR_ACTIVE_PANE_ID:-}"
+
+if [ -z "$active_pane" ]; then
+  printf '%s\n' "No focused Herdr pane was found." >&2
+  exit 1
+fi
+
+agent_json=$("$herdr_bin" agent get "$active_pane")
+agent_kind=$(printf '%s' "$agent_json" | jq -r '.result.agent.agent // empty')
+agent_status=$(printf '%s' "$agent_json" | jq -r '.result.agent.agent_status // empty')
+active_cwd=$(printf '%s' "$agent_json" | jq -r '.result.agent.cwd // empty')
+
+if [ "$agent_kind" != "codex" ]; then
+  printf '%s\n' "Control-Option-F transfers a focused Codex context to Claude." >&2
+  exit 1
+fi
+
+if [ "$agent_status" = "working" ]; then
+  printf '%s\n' "Wait for the current Codex turn to finish, then press Control-Option-F again." >&2
+  exit 1
+fi
+
+session_json=$(
+  HERDR_BIN_PATH="$herdr_bin" "$HOME/.local/bin/herdr-resolve-agent-session" "$active_pane"
+)
+session_id=$(printf '%s' "$session_json" | jq -r '.value // empty')
+
+case "$session_id" in
+  ????????-????-????-????-????????????) ;;
+  *)
+    printf '%s\n' "The focused Codex pane has no exact transferable session ID yet." >&2
+    exit 1
+    ;;
+esac
+
+state_db="$HOME/.codex/state_5.sqlite"
+if [ ! -f "$state_db" ] || ! command -v sqlite3 >/dev/null 2>&1; then
+  printf '%s\n' "Codex session storage is unavailable." >&2
+  exit 1
+fi
+
+sql_session=$(printf '%s' "$session_id" | sed "s/'/''/g")
+rollout_path=$(sqlite3 -noheader "file:${state_db}?mode=ro" \
+  "SELECT rollout_path FROM threads WHERE id = '${sql_session}' LIMIT 1;" 2>/dev/null || true)
+
+if [ -z "$rollout_path" ] || [ ! -f "$rollout_path" ]; then
+  printf '%s\n' "The Codex transcript for this context could not be found." >&2
+  exit 1
+fi
+
+handoff_dir="$HOME/.cache/herdr/handoffs"
+mkdir -p "$handoff_dir"
+handoff_file="$handoff_dir/codex-${session_id}-$(date +%Y%m%d-%H%M%S).md"
+handoff_tmp=$(mktemp "$handoff_dir/.codex-to-claude.XXXXXX")
+trap 'rm -f "$handoff_tmp"' EXIT HUP INT TERM
+
+{
+  printf '%s\n\n' "# Codex to Claude context handoff"
+  printf '%s\n' "Source Codex session: ${session_id}"
+  printf '%s\n\n' "Working directory: ${active_cwd}"
+  printf '%s\n\n' "The filesystem and Git state in the working directory are authoritative."
+  printf '%s\n\n' "Below are the 24 most recent user/Codex conversation messages. Tool output, hidden reasoning, credentials, and provider-specific session metadata are intentionally excluded."
+
+  jq -sr '
+    [ .[]
+      | select(.type == "response_item" and .payload.type == "message")
+      | select(
+          .payload.role == "user"
+          or (
+            .payload.role == "assistant"
+            and ((.payload.phase // "") != "commentary")
+          )
+        )
+      | ([.payload.content[]? | .text // empty] | join("\n")) as $text
+      | select(($text | length) > 0)
+      | {
+          role: .payload.role,
+          phase: (.payload.phase // ""),
+          text: ($text | if length > 6000 then .[-6000:] else . end)
+        }
+    ]
+    | .[-24:]
+    | .[]
+    | if .role == "user" then
+        "## User\n\n" + .text + "\n"
+      else
+        "## Codex" + (if .phase == "" then "" else " (" + .phase + ")" end) + "\n\n" + .text + "\n"
+      end
+  ' "$rollout_path"
+} >"$handoff_tmp"
+
+mv "$handoff_tmp" "$handoff_file"
+trap - EXIT HUP INT TERM
+
+split_json=$("$herdr_bin" pane split "$active_pane" \
+  --direction right \
+  --cwd "$active_cwd" \
+  --focus)
+new_pane=$(printf '%s' "$split_json" | jq -r '.result.pane.pane_id // empty')
+
+if [ -z "$new_pane" ]; then
+  printf '%s\n' "Herdr could not create the Claude pane." >&2
+  exit 1
+fi
+
+new_name="claude-handoff-$(date +%H%M%S)"
+sleep 1
+
+"$herdr_bin" agent start "$new_name" \
+  --kind claude \
+  --pane "$new_pane" \
+  --timeout 60000 \
+  -- \
+  --dangerously-skip-permissions \
+  --model fable \
+  --name "$new_name" >/dev/null
+
+handoff_prompt="Continue the work from the Codex session that I semantically forked into this Claude Fable session. Read the local handoff file at ${handoff_file}. Use its recent conversation as context, but treat the current filesystem and Git state in ${active_cwd} as authoritative. Inspect the relevant repository state, identify the latest unresolved user request, and continue that work. Do not merely summarize the handoff unless the work is already complete."
+
+"$herdr_bin" agent prompt "$new_pane" "$handoff_prompt" >/dev/null

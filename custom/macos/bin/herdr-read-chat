@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+active_pane="${HERDR_ACTIVE_PANE_ID:-}"
+history_file=$(mktemp "${TMPDIR:-/tmp}/herdr-chat.XXXXXX")
+trap 'rm -f "$history_file"' EXIT HUP INT TERM
+
+if [ -z "$active_pane" ]; then
+  printf '%s\n' "No focused Herdr pane was found." >"$history_file"
+elif ! "$herdr_bin" pane read "$active_pane" \
+  --source recent-unwrapped \
+  --lines 5000 >"$history_file" 2>&1; then
+  "$herdr_bin" pane read "$active_pane" --source visible >"$history_file" 2>&1 || true
+fi
+
+exec less -R +G "$history_file"

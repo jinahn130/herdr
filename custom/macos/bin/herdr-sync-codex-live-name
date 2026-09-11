@@ -1,0 +1,25 @@
+#!/bin/zsh
+set -u
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+pane_id="${1:-}"
+session_id="${2:-}"
+chat_name="${3:-}"
+
+[[ -n "$pane_id" && -n "$session_id" && -n "$chat_name" ]] || exit 2
+
+# The saved Codex title can be changed while a turn is running, but the live
+# TUI keeps its old in-memory title. Wait until the pane is safe to accept a
+# slash command, then update that live title too. Re-check the session first so
+# a closed or repurposed pane can never receive the command.
+"$herdr_bin" agent wait "$pane_id" \
+  --until idle \
+  --until done \
+  --timeout 21600000 >/dev/null 2>&1 || exit 0
+
+agent_json=$("$herdr_bin" agent get "$pane_id" 2>/dev/null) || exit 0
+current_session=$(print -r -- "$agent_json" | jq -r '.result.agent.agent_session.value // empty')
+agent_kind=$(print -r -- "$agent_json" | jq -r '.result.agent.agent // empty')
+[[ "$agent_kind" == "codex" && "$current_session" == "$session_id" ]] || exit 0
+
+"$herdr_bin" agent prompt "$pane_id" "/rename $chat_name" >/dev/null 2>&1 || true

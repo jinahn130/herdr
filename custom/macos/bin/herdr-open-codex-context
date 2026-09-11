@@ -1,0 +1,31 @@
+#!/bin/sh
+set -eu
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+active_pane="${HERDR_ACTIVE_PANE_ID:-}"
+mode="${1:-resume}"
+
+case "$mode" in
+  resume|fork) ;;
+  *)
+    printf '%s\n' "Usage: herdr-open-codex-context resume|fork" >&2
+    exit 2
+    ;;
+esac
+
+if [ -z "$active_pane" ]; then
+  printf '%s\n' "Focus a Herdr pane first." >&2
+  exit 1
+fi
+
+split_json=$("$herdr_bin" pane split "$active_pane" --direction right --focus)
+new_pane=$(printf '%s' "$split_json" | jq -r '.result.pane.pane_id // empty')
+if [ -z "$new_pane" ]; then
+  printf '%s\n' "Herdr created no new pane." >&2
+  exit 1
+fi
+
+# Let the new login shell initialize before submitting the Codex command.
+sleep 1
+exec "$herdr_bin" pane run "$new_pane" \
+  "exec codex --no-alt-screen --dangerously-bypass-approvals-and-sandbox $mode --all"
