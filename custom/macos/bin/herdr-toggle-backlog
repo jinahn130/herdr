@@ -21,6 +21,7 @@ fi
 
 mkdir -p "$state_dir"
 marker="$state_dir/$identity"
+backlog_metadata="backlog=BACKLOG"
 
 if [ -e "$marker" ]; then
   "$herdr_bin" pane report-metadata "$active_pane" \
@@ -31,7 +32,7 @@ if [ -e "$marker" ]; then
 else
   "$herdr_bin" pane report-metadata "$active_pane" \
     --source manual-backlog \
-    --token backlog=BACKLOG >/dev/null
+    --token "$backlog_metadata" >/dev/null
   touch "$marker"
   "$herdr_bin" notification show "Marked BACKLOG" --body "$agent_name" >/dev/null
 fi

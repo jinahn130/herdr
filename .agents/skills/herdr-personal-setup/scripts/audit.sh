@@ -128,6 +128,17 @@ else
   pass "portable macOS controls contain no Jin-specific absolute paths"
 fi
 
+# GitGuardian's Generic CLI Secret detector treats literal values following
+# options such as --token or --password as possible credentials. Even when a
+# Herdr option is display-only metadata, keep its value in a variable so a
+# portable workflow commit cannot create a misleading secret incident.
+if grep -R -E -n -- '--(secret(-key)?|token|api[_-]?key|cred(entials)?|auth|password|pwd)(=|[[:space:]])[A-Za-z0-9_.+/~-][A-Za-z0-9_.+/=~-]{5,128}' \
+  "$portable_mac_root" "$repo_root/custom/windows" >/dev/null 2>&1; then
+  fail "portable controls contain a literal value after a secret-like CLI option"
+else
+  pass "portable controls avoid literal secret-like CLI option values"
+fi
+
 portable_helper_failure=false
 for portable_helper in "$portable_mac_root/bin"/*; do
   [ -e "$portable_helper" ] || continue
