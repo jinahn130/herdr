@@ -929,6 +929,16 @@
           "description": "Force a full host-terminal redraw when the outer terminal regains focus."
         },
         {
+          "key": "ui.done_acknowledgement",
+          "type": "enum",
+          "default": "tab",
+          "description": "Choose whether focusing completed work acknowledges every pane in the active tab or only the focused pane.",
+          "values": [
+            "tab",
+            "pane"
+          ]
+        },
+        {
           "key": "ui.mouse_scroll_lines",
           "type": "integer",
           "default": "3",

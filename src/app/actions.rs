@@ -5,6 +5,7 @@ use std::time::Instant;
 
 use tracing::warn;
 
+use crate::config::DoneAcknowledgementConfig;
 use crate::detect::{Agent, AgentState};
 use crate::events::AppEvent;
 use crate::layout::PaneId;
@@ -306,6 +307,7 @@ impl AppState {
             pane_id,
         };
         if previous.as_ref() == Some(&target) {
+            self.acknowledge_pane_focus(ws_idx, pane_id);
             return false;
         }
 
@@ -318,6 +320,7 @@ impl AppState {
             tab.layout.focus_pane(pane_id);
             self.previous_pane_focus = previous;
             self.mark_session_dirty();
+            self.acknowledge_pane_focus(ws_idx, pane_id);
             return true;
         }
         false
@@ -462,9 +465,13 @@ impl AppState {
             let workspace_id = self.workspaces[idx].id.clone();
             crate::logging::workspace_focused(&workspace_id);
             self.mark_session_dirty();
+            let acknowledgement = self.done_acknowledgement;
             if let Some(ws) = self.workspaces.get_mut(idx) {
                 let active_tab = ws.active_tab;
-                ws.switch_tab(active_tab);
+                match acknowledgement {
+                    DoneAcknowledgementConfig::Tab => ws.switch_tab(active_tab),
+                    DoneAcknowledgementConfig::Pane => ws.switch_tab_preserving_seen(active_tab),
+                }
                 let tab_id =
                     public_tab_id_for_index(ws, active_tab).unwrap_or_else(|| workspace_id.clone());
                 crate::logging::tab_focused(&workspace_id, &tab_id);
@@ -494,8 +501,12 @@ impl AppState {
             crate::logging::workspace_focused(&workspace_id);
         }
         self.mark_session_dirty();
+        let acknowledgement = self.done_acknowledgement;
         if let Some(ws) = self.workspaces.get_mut(ws_idx) {
-            ws.switch_tab(tab_idx);
+            match acknowledgement {
+                DoneAcknowledgementConfig::Tab => ws.switch_tab(tab_idx),
+                DoneAcknowledgementConfig::Pane => ws.switch_tab_preserving_seen(tab_idx),
+            }
             let tab_id =
                 public_tab_id_for_index(ws, tab_idx).unwrap_or_else(|| workspace_id.clone());
             crate::logging::tab_focused(&workspace_id, &tab_id);
@@ -508,10 +519,14 @@ impl AppState {
     pub fn switch_tab(&mut self, idx: usize) {
         if let Some(ws_idx) = self.active {
             let previous_focus = self.current_pane_focus_target();
+            let acknowledgement = self.done_acknowledgement;
             let Some(ws) = self.workspaces.get_mut(ws_idx) else {
                 return;
             };
-            ws.switch_tab(idx);
+            match acknowledgement {
+                DoneAcknowledgementConfig::Tab => ws.switch_tab(idx),
+                DoneAcknowledgementConfig::Pane => ws.switch_tab_preserving_seen(idx),
+            }
             let workspace_id = ws.id.clone();
             let tab_id = public_tab_id_for_index(ws, idx).unwrap_or_else(|| workspace_id.clone());
             crate::logging::tab_focused(&workspace_id, &tab_id);
@@ -540,6 +555,37 @@ impl AppState {
             }
         }
         changed
+    }
+
+    pub(crate) fn acknowledge_outer_focus(&mut self) -> bool {
+        match self.done_acknowledgement {
+            DoneAcknowledgementConfig::Tab => self.mark_active_tab_seen(),
+            DoneAcknowledgementConfig::Pane => false,
+        }
+    }
+
+    pub(crate) fn acknowledge_pane_focus(&mut self, ws_idx: usize, pane_id: PaneId) -> bool {
+        match self.done_acknowledgement {
+            DoneAcknowledgementConfig::Tab => self.mark_active_tab_seen(),
+            DoneAcknowledgementConfig::Pane => {
+                let Some(tab_idx) = self
+                    .workspaces
+                    .get(ws_idx)
+                    .and_then(|workspace| workspace.find_tab_index_for_pane(pane_id))
+                else {
+                    return false;
+                };
+                let Some(pane) = self.workspaces[ws_idx].tabs[tab_idx]
+                    .panes
+                    .get_mut(&pane_id)
+                else {
+                    return false;
+                };
+                let changed = !pane.seen;
+                pane.seen = true;
+                changed
+            }
+        }
     }
 
     pub fn move_workspace(&mut self, source_idx: usize, insert_idx: usize) -> bool {
@@ -2686,6 +2732,103 @@ mod tests {
 
         state.switch_workspace(1);
         assert!(state.workspaces[1].panes.get(&id).unwrap().seen);
+    }
+
+    #[test]
+    fn switch_workspace_preserves_done_panes_with_pane_acknowledgement() {
+        let mut state = app_with_workspaces(&["a", "b"]);
+        let root = state.workspaces[1].tabs[0].root_pane;
+        let split = state.workspaces[1].test_split(ratatui::layout::Direction::Horizontal);
+        state.workspaces[1].tabs[0].layout.focus_pane(root);
+        state.workspaces[1].tabs[0]
+            .panes
+            .get_mut(&root)
+            .unwrap()
+            .seen = false;
+        state.workspaces[1].tabs[0]
+            .panes
+            .get_mut(&split)
+            .unwrap()
+            .seen = false;
+        state.done_acknowledgement = DoneAcknowledgementConfig::Pane;
+
+        state.switch_workspace(1);
+
+        assert!(!state.workspaces[1].tabs[0].panes[&root].seen);
+        assert!(!state.workspaces[1].tabs[0].panes[&split].seen);
+    }
+
+    #[test]
+    fn switch_tab_preserves_done_panes_with_pane_acknowledgement() {
+        let mut state = app_with_workspaces(&["a"]);
+        let tab_idx = state.workspaces[0].test_add_tab(Some("review"));
+        state.workspaces[0].switch_tab_preserving_seen(tab_idx);
+        let root = state.workspaces[0].tabs[tab_idx].root_pane;
+        let split = state.workspaces[0].test_split(ratatui::layout::Direction::Horizontal);
+        state.workspaces[0].tabs[tab_idx].layout.focus_pane(root);
+        state.workspaces[0].tabs[tab_idx]
+            .panes
+            .get_mut(&root)
+            .unwrap()
+            .seen = false;
+        state.workspaces[0].tabs[tab_idx]
+            .panes
+            .get_mut(&split)
+            .unwrap()
+            .seen = false;
+        state.workspaces[0].switch_tab_preserving_seen(0);
+        state.done_acknowledgement = DoneAcknowledgementConfig::Pane;
+
+        assert!(state.switch_workspace_tab(0, tab_idx));
+
+        assert!(!state.workspaces[0].tabs[tab_idx].panes[&root].seen);
+        assert!(!state.workspaces[0].tabs[tab_idx].panes[&split].seen);
+    }
+
+    #[test]
+    fn direct_pane_focus_acknowledges_only_that_pane_when_configured() {
+        let mut state = app_with_workspaces(&["a"]);
+        let root = state.workspaces[0].tabs[0].root_pane;
+        let split = state.workspaces[0].test_split(ratatui::layout::Direction::Horizontal);
+        state.workspaces[0].tabs[0].layout.focus_pane(root);
+        state.workspaces[0].tabs[0]
+            .panes
+            .get_mut(&root)
+            .unwrap()
+            .seen = false;
+        state.workspaces[0].tabs[0]
+            .panes
+            .get_mut(&split)
+            .unwrap()
+            .seen = false;
+        state.done_acknowledgement = DoneAcknowledgementConfig::Pane;
+
+        assert!(!state.focus_pane_in_workspace(0, root));
+
+        assert!(state.workspaces[0].tabs[0].panes[&root].seen);
+        assert!(!state.workspaces[0].tabs[0].panes[&split].seen);
+    }
+
+    #[test]
+    fn outer_focus_preserves_done_panes_with_pane_acknowledgement() {
+        let mut state = app_with_workspaces(&["a"]);
+        let root = state.workspaces[0].tabs[0].root_pane;
+        let split = state.workspaces[0].test_split(ratatui::layout::Direction::Horizontal);
+        state.workspaces[0].tabs[0]
+            .panes
+            .get_mut(&root)
+            .unwrap()
+            .seen = false;
+        state.workspaces[0].tabs[0]
+            .panes
+            .get_mut(&split)
+            .unwrap()
+            .seen = false;
+        state.done_acknowledgement = DoneAcknowledgementConfig::Pane;
+
+        assert!(!state.acknowledge_outer_focus());
+        assert!(!state.workspaces[0].tabs[0].panes[&root].seen);
+        assert!(!state.workspaces[0].tabs[0].panes[&split].seen);
     }
 
     #[test]

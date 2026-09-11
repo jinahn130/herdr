@@ -898,6 +898,14 @@ impl<'de> Deserialize<'de> for PaneBordersConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DoneAcknowledgementConfig {
+    #[default]
+    Tab,
+    Pane,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct UiConfig {
@@ -922,6 +930,8 @@ pub struct UiConfig {
     pub right_click_passthrough_modifier: RightClickPassthroughModifierConfig,
     /// Force a full host-terminal redraw when the outer terminal regains focus. Default: true.
     pub redraw_on_focus_gained: bool,
+    /// Scope used to acknowledge unseen completed work. Default: tab.
+    pub done_acknowledgement: DoneAcknowledgementConfig,
     /// Lines to scroll per mouse wheel notch. Default: 3.
     pub mouse_scroll_lines: Option<NonZeroUsize>,
     /// Ask for confirmation before closing a workspace. Default: true.
@@ -1169,6 +1179,7 @@ impl Default for UiConfig {
             host_cursor: HostCursorModeConfig::Auto,
             right_click_passthrough_modifier: RightClickPassthroughModifierConfig::default(),
             redraw_on_focus_gained: true,
+            done_acknowledgement: DoneAcknowledgementConfig::Tab,
             mouse_scroll_lines: None,
             confirm_close: true,
             prompt_new_tab_name: true,
@@ -1798,6 +1809,26 @@ redraw_on_focus_gained = false
 "#;
         let config: Config = toml::from_str(toml).unwrap();
         assert!(!config.ui.redraw_on_focus_gained);
+    }
+
+    #[test]
+    fn done_acknowledgement_defaults_to_tab_and_parses_pane() {
+        assert_eq!(
+            Config::default().ui.done_acknowledgement,
+            DoneAcknowledgementConfig::Tab
+        );
+
+        let config: Config = toml::from_str(
+            r#"
+[ui]
+done_acknowledgement = "pane"
+"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.ui.done_acknowledgement,
+            DoneAcknowledgementConfig::Pane
+        );
     }
 
     #[test]

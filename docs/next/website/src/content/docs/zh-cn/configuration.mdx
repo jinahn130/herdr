@@ -300,6 +300,15 @@ text = "#cdd6f4"
 
 在 `[ui]` 下设置 `tab_bar_position = "bottom"`，可将桌面标签栏放到终端窗格下方。Prefix、Navigate、Copy 和 Resize 模式栏会在显示期间临时替换底部标签栏。默认值为 `"top"`。
 
+默认情况下，聚焦 Herdr 会确认活动标签页中所有已完成的智能体，并将其状态从 `done` 改为 `idle`。若要只确认你聚焦的窗格，同时让其他已完成窗格保持 `done`，请配置：
+
+```toml
+[ui]
+done_acknowledgement = "pane"
+```
+
+使用窗格级确认后，仅将焦点切回 Herdr 外层窗口不会确认任何窗格。点击窗格、将焦点导航到窗格，或通过 `pane focus` / `agent focus` 指定窗格，只会确认该窗格。
+
 可在标签栏右侧配置一个类似 tmux 的有序状态区：
 
 ```toml

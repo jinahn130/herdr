@@ -383,7 +383,12 @@ impl ClientShellState {
         if let Some(surface) = presented_surface {
             self.endpoints[index]
                 .agent_presentation
-                .acknowledge_surface(&mut snapshot, surface, self.outer_focused);
+                .acknowledge_surface(
+                    &mut snapshot,
+                    surface,
+                    self.outer_focused,
+                    self.config.done_acknowledgement,
+                );
         }
         let previous = self.endpoints[index].snapshot.as_deref();
         let mut next_recency = self
@@ -435,9 +440,35 @@ impl ClientShellState {
             let Some(snapshot) = endpoint.snapshot.as_deref_mut() else {
                 return false;
             };
+            endpoint.agent_presentation.acknowledge_surface(
+                snapshot,
+                surface,
+                self.outer_focused,
+                self.config.done_acknowledgement,
+            )
+        };
+        if changed {
+            self.snapshot = self.endpoints[index].snapshot.clone();
+        }
+        changed
+    }
+
+    pub(crate) fn acknowledge_active_pane_agent(&mut self, pane_id: &str) -> bool {
+        let Some(index) = self
+            .endpoints
+            .iter()
+            .position(|endpoint| endpoint.endpoint_id == self.active_endpoint_id)
+        else {
+            return false;
+        };
+        let changed = {
+            let endpoint = &mut self.endpoints[index];
+            let Some(snapshot) = endpoint.snapshot.as_deref_mut() else {
+                return false;
+            };
             endpoint
                 .agent_presentation
-                .acknowledge_surface(snapshot, surface, self.outer_focused)
+                .acknowledge_pane(snapshot, pane_id)
         };
         if changed {
             self.snapshot = self.endpoints[index].snapshot.clone();

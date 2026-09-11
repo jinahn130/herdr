@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::api::schema::AgentStatus;
+use crate::config::DoneAcknowledgementConfig;
 use crate::protocol::{ClientShellAgent, ClientShellSnapshot, PaneSurfaceFrame};
 
 #[derive(Clone, Debug, Default)]
@@ -38,8 +39,10 @@ impl EndpointAgentPresentation {
         snapshot: &mut ClientShellSnapshot,
         surface: &PaneSurfaceFrame,
         outer_focused: Option<bool>,
+        acknowledgement: DoneAcknowledgementConfig,
     ) -> bool {
-        if outer_focused == Some(false)
+        if acknowledgement == DoneAcknowledgementConfig::Pane
+            || outer_focused == Some(false)
             || self.boot_id.as_deref() != Some(surface.boot_id.as_str())
             || snapshot.boot_id != surface.boot_id
             || snapshot.revision != surface.projection_revision
@@ -69,6 +72,30 @@ impl EndpointAgentPresentation {
             project_aggregate_status(snapshot);
         }
         changed
+    }
+
+    pub(super) fn acknowledge_pane(
+        &mut self,
+        snapshot: &mut ClientShellSnapshot,
+        pane_id: &str,
+    ) -> bool {
+        let Some(agent) = snapshot
+            .agents
+            .iter()
+            .find(|agent| agent.pane_id == pane_id)
+        else {
+            return false;
+        };
+        let acknowledged = self.acknowledged.entry(agent.pane_id.clone()).or_default();
+        if *acknowledged >= agent.state_change_seq {
+            return false;
+        }
+        *acknowledged = agent.state_change_seq;
+        for agent in &mut snapshot.agents {
+            agent.agent_status = self.projected_status(agent);
+        }
+        project_aggregate_status(snapshot);
+        true
     }
 
     fn projected_status(&self, agent: &ClientShellAgent) -> AgentStatus {
@@ -215,7 +242,12 @@ mod tests {
         let mut completed = snapshot(AgentStatus::Idle, 5, 2);
         presentation.project_snapshot(&mut completed);
 
-        assert!(presentation.acknowledge_surface(&mut completed, &surface(2), Some(true)));
+        assert!(presentation.acknowledge_surface(
+            &mut completed,
+            &surface(2),
+            Some(true),
+            DoneAcknowledgementConfig::Tab,
+        ));
         assert_eq!(completed.agents[0].agent_status, AgentStatus::Idle);
     }
 
@@ -235,7 +267,8 @@ mod tests {
         assert!(viewing_client.acknowledge_surface(
             &mut completed_for_viewer,
             &surface(2),
-            Some(true)
+            Some(true),
+            DoneAcknowledgementConfig::Tab,
         ));
 
         assert_eq!(
@@ -256,8 +289,58 @@ mod tests {
         let mut completed = snapshot(AgentStatus::Idle, 5, 2);
         presentation.project_snapshot(&mut completed);
 
-        assert!(!presentation.acknowledge_surface(&mut completed, &surface(1), Some(true)));
-        assert!(!presentation.acknowledge_surface(&mut completed, &surface(2), Some(false)));
+        assert!(!presentation.acknowledge_surface(
+            &mut completed,
+            &surface(1),
+            Some(true),
+            DoneAcknowledgementConfig::Tab,
+        ));
+        assert!(!presentation.acknowledge_surface(
+            &mut completed,
+            &surface(2),
+            Some(false),
+            DoneAcknowledgementConfig::Tab,
+        ));
         assert_eq!(completed.agents[0].agent_status, AgentStatus::Done);
+    }
+
+    #[test]
+    fn pane_scope_does_not_acknowledge_a_presented_surface() {
+        let mut presentation = EndpointAgentPresentation::default();
+        let mut initial = snapshot(AgentStatus::Working, 4, 1);
+        presentation.project_snapshot(&mut initial);
+        let mut completed = snapshot(AgentStatus::Idle, 5, 2);
+        presentation.project_snapshot(&mut completed);
+
+        assert!(!presentation.acknowledge_surface(
+            &mut completed,
+            &surface(2),
+            Some(true),
+            DoneAcknowledgementConfig::Pane,
+        ));
+        assert_eq!(completed.agents[0].agent_status, AgentStatus::Done);
+    }
+
+    #[test]
+    fn explicit_pane_acknowledgement_only_clears_the_target_agent() {
+        let mut presentation = EndpointAgentPresentation::default();
+        let mut initial = snapshot(AgentStatus::Working, 4, 1);
+        initial.agents.push(ClientShellAgent {
+            pane_id: "sibling-pane".into(),
+            focused: false,
+            ..agent(AgentStatus::Working, 4)
+        });
+        presentation.project_snapshot(&mut initial);
+        let mut completed = snapshot(AgentStatus::Idle, 5, 2);
+        completed.agents.push(ClientShellAgent {
+            pane_id: "sibling-pane".into(),
+            focused: false,
+            ..agent(AgentStatus::Idle, 5)
+        });
+        presentation.project_snapshot(&mut completed);
+
+        assert!(presentation.acknowledge_pane(&mut completed, "agent-pane"));
+        assert_eq!(completed.agents[0].agent_status, AgentStatus::Idle);
+        assert_eq!(completed.agents[1].agent_status, AgentStatus::Done);
     }
 }

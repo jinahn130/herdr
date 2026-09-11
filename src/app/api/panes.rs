@@ -474,7 +474,6 @@ impl App {
         };
 
         self.state.focus_pane_in_workspace(ws_idx, pane_id);
-        self.state.mark_active_tab_seen();
         self.state.mode = crate::app::Mode::Terminal;
 
         let Some(pane) = self.pane_info(ws_idx, pane_id) else {
@@ -4119,8 +4118,10 @@ mod tests {
         app.state.active = Some(0);
         app.state.selected = 0;
         app.state.outer_terminal_focus = Some(false);
+        app.state.done_acknowledgement = crate::config::DoneAcknowledgementConfig::Pane;
 
         let pane_id = app.state.workspaces[0].tabs[0].root_pane;
+        let other_pane = app.state.workspaces[0].test_split(ratatui::layout::Direction::Horizontal);
         let terminal_id = app.state.workspaces[0].tabs[0].panes[&pane_id]
             .attached_terminal_id
             .clone();
@@ -4128,6 +4129,11 @@ mod tests {
         app.state.workspaces[0].tabs[0]
             .panes
             .get_mut(&pane_id)
+            .unwrap()
+            .seen = false;
+        app.state.workspaces[0].tabs[0]
+            .panes
+            .get_mut(&other_pane)
             .unwrap()
             .seen = false;
         app.state.workspaces[0].tabs[0].layout.focus_pane(pane_id);
@@ -4145,6 +4151,8 @@ mod tests {
             panic!("expected pane info response");
         };
         assert_eq!(pane.agent_status, crate::api::schema::AgentStatus::Idle);
+        assert!(app.state.workspaces[0].tabs[0].panes[&pane_id].seen);
+        assert!(!app.state.workspaces[0].tabs[0].panes[&other_pane].seen);
     }
 
     #[test]

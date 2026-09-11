@@ -649,6 +649,98 @@ fn unselected_endpoint_completion_projects_done_client_side() {
     assert_eq!(state.active_endpoint_id, ClientEndpointId::Local);
 }
 
+fn pane_scoped_state_with_done_completion() -> ClientShellState {
+    use crate::api::schema::AgentStatus;
+
+    let mut config = Config::default();
+    config.ui.done_acknowledgement = crate::config::DoneAcknowledgementConfig::Pane;
+    let mut state = ClientShellState::new(ClientShellConfig::from_config(&config));
+    let mut working = snapshot();
+    working.agents = vec![agent("focused agent", AgentStatus::Working, 1)];
+    state.set_snapshot(Box::new(working));
+    state.set_pane_surface(surface());
+
+    let mut completed = snapshot();
+    completed.revision = 2;
+    completed.agents = vec![agent("focused agent", AgentStatus::Idle, 2)];
+    state.set_snapshot(Box::new(completed));
+    let mut completed_surface = surface();
+    completed_surface.projection_revision = 2;
+    state.set_pane_surface(completed_surface);
+    assert_eq!(
+        state.snapshot.as_ref().unwrap().agents[0].agent_status,
+        AgentStatus::Done
+    );
+    state
+}
+
+#[test]
+fn pane_scope_explicit_focus_acknowledges_only_the_target_pane() {
+    use crate::api::schema::{AgentStatus, Method, PaneTarget};
+
+    let mut state = pane_scoped_state_with_done_completion();
+    let mut outcome = ClientShellInput::default();
+
+    state.push_endpoint_method(
+        Method::PaneFocus(PaneTarget {
+            pane_id: "pane_1".into(),
+        }),
+        &mut outcome,
+    );
+
+    assert_eq!(
+        state.snapshot.as_ref().unwrap().agents[0].agent_status,
+        AgentStatus::Idle
+    );
+    assert!(outcome.repaint);
+}
+
+#[test]
+fn pane_scope_directional_focus_acknowledges_the_returned_pane() {
+    use crate::api::schema::{AgentStatus, Method, PaneDirection, PaneFocusDirectionParams};
+
+    let mut state = pane_scoped_state_with_done_completion();
+    let mut outcome = ClientShellInput::default();
+    state.push_endpoint_method(
+        Method::PaneFocusDirection(PaneFocusDirectionParams {
+            pane_id: Some("pane_1".into()),
+            direction: PaneDirection::Right,
+        }),
+        &mut outcome,
+    );
+    let [ClientShellAction::Endpoint { request, .. }] = &outcome.actions[..] else {
+        panic!("expected pane focus request");
+    };
+    let request_id = request.id.clone();
+    let result = serde_json::from_value(serde_json::json!({
+        "type": "pane_focus_direction",
+        "focus": {
+            "changed": true,
+            "source_pane_id": "pane_1",
+            "focused_pane_id": "pane_1",
+            "layout": {
+                "workspace_id": "ws_1",
+                "tab_id": "tab_1",
+                "zoomed": false,
+                "area": { "x": 0, "y": 0, "width": 80, "height": 24 },
+                "focused_pane_id": "pane_1",
+                "panes": [],
+                "splits": []
+            }
+        }
+    }))
+    .unwrap();
+
+    let (repaint, actions) = state.handle_endpoint_result("boot-1", &request_id, Ok(result));
+
+    assert!(repaint);
+    assert!(actions.is_empty());
+    assert_eq!(
+        state.snapshot.as_ref().unwrap().agents[0].agent_status,
+        AgentStatus::Idle
+    );
+}
+
 #[test]
 fn clicking_remote_machine_name_requests_activation_without_mutating_projection() {
     let (mut state, endpoint_id) = state_with_remote();

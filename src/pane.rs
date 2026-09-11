@@ -96,6 +96,10 @@ fn apply_pane_terminal_env(cmd: &mut CommandBuilder) {
     // when the remote side lacks matching terminfo entries.
     cmd.env("TERM", PANE_TERM);
     cmd.env("COLORTERM", PANE_COLORTERM);
+    // Herdr renders full-color terminal output itself. Do not let a NO_COLOR
+    // setting inherited by the outer launcher silently disable colors in every
+    // shell and interactive agent created inside Herdr.
+    cmd.env_remove("NO_COLOR");
     cmd.env_remove("WT_SESSION");
 }
 
@@ -3563,6 +3567,16 @@ mod tests {
         apply_pane_terminal_env(&mut cmd);
 
         assert!(cmd.get_env("WT_SESSION").is_none());
+    }
+
+    #[test]
+    fn pane_terminal_env_removes_outer_no_color_override() {
+        let mut cmd = CommandBuilder::new("shell");
+        cmd.env("NO_COLOR", "1");
+
+        apply_pane_terminal_env(&mut cmd);
+
+        assert!(cmd.get_env("NO_COLOR").is_none());
     }
 
     #[tokio::test]

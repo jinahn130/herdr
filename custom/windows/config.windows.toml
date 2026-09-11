@@ -1,0 +1,79 @@
+# Windows-only user configuration. Install this as %APPDATA%\herdr\config.toml.
+# It is never loaded on macOS unless explicitly copied there.
+
+onboarding = false
+
+[theme]
+name = "catppuccin"
+
+[keys]
+# Agents: Alt+1 through Alt+9.
+focus_agent = ["alt+1..9", "prefix+alt+1..9"]
+previous_agent = ["ctrl+alt+left", "prefix+alt+left"]
+next_agent = ["ctrl+alt+right", "prefix+alt+right"]
+
+# Tabs: Ctrl+Alt+1 through Ctrl+Alt+9, plus Alt-minus/Alt-plus.
+switch_tab = ["ctrl+alt+1..9", "prefix+1..9"]
+previous_tab = ["alt+minus", "prefix+p"]
+next_tab = ["alt+plus", "alt+=", "alt+shift+=", "prefix+n"]
+rename_tab = ["alt+shift+t", "prefix+shift+t"]
+
+# Workspaces: Alt+Shift+1 through Alt+Shift+9.
+switch_workspace = ["alt+shift+1..9", "prefix+shift+1..9"]
+previous_workspace = "alt+p"
+next_workspace = "alt+n"
+new_workspace = ["alt+w", "prefix+shift+n"]
+new_worktree = ["alt+g", "prefix+shift+g"]
+
+copy_mode = ["alt+s", "prefix+["]
+# Alt+R is reserved for rename on Windows.
+resize_mode = ["ctrl+alt+r", "prefix+r"]
+
+[ui]
+mouse_capture = true
+mouse_scroll_lines = 6
+pane_scrollbars = true
+done_acknowledgement = "pane"
+
+[advanced]
+scrollback_limit_bytes = 50000000
+
+[[keys.command]]
+key = "alt+r"
+type = "popup"
+command = 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%APPDATA%\herdr\custom\Rename-HerdrAgent.ps1"'
+description = "rename the focused agent"
+width = 56
+height = 8
+
+[[keys.command]]
+key = "ctrl+l"
+type = "popup"
+command = 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%APPDATA%\herdr\custom\Rename-HerdrAgent.ps1"'
+description = "rename the focused agent"
+width = 56
+height = 8
+
+[[keys.command]]
+key = "alt+f"
+type = "popup"
+command = 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%APPDATA%\herdr\custom\Fork-HerdrAgent.ps1" -Placement right'
+description = "fork focused Codex or Claude context to the right"
+width = 64
+height = 8
+
+[[keys.command]]
+key = "alt+t"
+type = "popup"
+command = 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%APPDATA%\herdr\custom\Move-HerdrPane.ps1"'
+description = "move focused pane to a selected or new tab"
+width = 68
+height = 22
+
+[[keys.command]]
+key = "ctrl+period"
+type = "popup"
+command = 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%APPDATA%\herdr\custom\Show-HerdrPromptHistory.ps1"'
+description = "show sent-prompt history for the focused agent"
+width = "85%"
+height = "65%"

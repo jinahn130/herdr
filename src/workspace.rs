@@ -453,9 +453,17 @@ impl Workspace {
     }
 
     pub fn switch_tab(&mut self, idx: usize) {
+        self.switch_tab_with_seen_policy(idx, true);
+    }
+
+    pub(crate) fn switch_tab_preserving_seen(&mut self, idx: usize) {
+        self.switch_tab_with_seen_policy(idx, false);
+    }
+
+    fn switch_tab_with_seen_policy(&mut self, idx: usize, mark_seen: bool) {
         if idx < self.tabs.len() {
             self.active_tab = idx;
-            if let Some(tab) = self.tabs.get_mut(idx) {
+            if let Some(tab) = self.tabs.get_mut(idx).filter(|_| mark_seen) {
                 for pane in tab.panes.values_mut() {
                     pane.seen = true;
                 }

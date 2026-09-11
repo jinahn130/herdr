@@ -271,6 +271,10 @@ const DEFAULT_CONFIG: &str = r##"# herdr configuration
 # Trade-off: rare host terminal surface corruption may persist until the next full redraw.
 # redraw_on_focus_gained = true
 
+# When completed work changes from "done" to "idle": "tab" or "pane".
+# "pane" keeps other panes marked done until each pane is focused directly.
+# done_acknowledgement = "tab"
+
 # Pane scrollback lines to scroll per mouse wheel notch.
 # mouse_scroll_lines = 3
 

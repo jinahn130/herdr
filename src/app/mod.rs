@@ -485,6 +485,7 @@ impl App {
             sidebar_agents: config.ui.sidebar.agents.clone(),
             sidebar_spaces: config.ui.sidebar.spaces.clone(),
             next_agent_state_change_seq: 0,
+            done_acknowledgement: config.ui.done_acknowledgement,
             confirm_close: config.ui.confirm_close,
             pane_borders: config.ui.pane_borders,
             pane_outer_borders: config.ui.pane_outer_borders,
@@ -832,6 +833,7 @@ impl App {
                 ));
 
                 self.loaded_host_cursor = config.ui.host_cursor;
+                self.state.done_acknowledgement = config.ui.done_acknowledgement;
                 self.state.confirm_close = config.ui.confirm_close;
                 self.state.pane_borders = config.ui.pane_borders;
                 self.state.pane_outer_borders = config.ui.pane_outer_borders;
@@ -1340,6 +1342,26 @@ mod tests {
         );
 
         assert_eq!(app.state.agent_panel_sort, state::AgentPanelSort::Priority);
+    }
+
+    #[test]
+    fn startup_uses_done_acknowledgement_config() {
+        let mut config = Config::default();
+        config.ui.done_acknowledgement = crate::config::DoneAcknowledgementConfig::Pane;
+        let (_api_tx, api_rx) = tokio::sync::mpsc::unbounded_channel();
+
+        let app = App::new(
+            &config,
+            crate::app::AppPolicy::TEST,
+            None,
+            api_rx,
+            crate::api::EventHub::default(),
+        );
+
+        assert_eq!(
+            app.state.done_acknowledgement,
+            crate::config::DoneAcknowledgementConfig::Pane
+        );
     }
 
     #[test]

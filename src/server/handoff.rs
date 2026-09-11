@@ -82,6 +82,7 @@ pub(crate) fn spawn_handoff_import(
         .arg("--handoff-import")
         .arg(socket_path)
         .arg(token)
+        .env_remove("NO_COLOR")
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());

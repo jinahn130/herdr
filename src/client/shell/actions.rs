@@ -395,7 +395,7 @@ impl ClientShellState {
     pub(super) fn push_endpoint_method_with_kind(
         &mut self,
         method: crate::api::schema::Method,
-        kind: PendingEndpointKind,
+        mut kind: PendingEndpointKind,
         outcome: &mut ClientShellInput,
     ) -> bool {
         if !self.endpoint_is_online(&self.active_endpoint_id) {
@@ -415,6 +415,21 @@ impl ClientShellState {
             );
             return false;
         }
+        let pane_to_acknowledge =
+            if self.config.done_acknowledgement == crate::config::DoneAcknowledgementConfig::Pane {
+                match &method {
+                    crate::api::schema::Method::PaneFocus(target) => Some(target.pane_id.clone()),
+                    crate::api::schema::Method::PaneFocusDirection(_)
+                        if matches!(kind, PendingEndpointKind::Generic) =>
+                    {
+                        kind = PendingEndpointKind::PaneFocusDirection;
+                        None
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            };
         let Some(snapshot) = self.snapshot.as_deref() else {
             return false;
         };
@@ -451,6 +466,9 @@ impl ClientShellState {
                 method,
             }),
         });
+        if let Some(pane_id) = pane_to_acknowledge {
+            outcome.repaint |= self.acknowledge_active_pane_agent(&pane_id);
+        }
         true
     }
 
@@ -577,6 +595,23 @@ impl ClientShellState {
         }
         match pending.kind {
             PendingEndpointKind::Generic => {}
+            PendingEndpointKind::PaneFocusDirection => {
+                return match result {
+                    Ok(crate::api::schema::ResponseResult::PaneFocusDirection { focus }) => {
+                        let repaint = focus
+                            .focused_pane_id
+                            .as_deref()
+                            .is_some_and(|pane_id| self.acknowledge_active_pane_agent(pane_id));
+                        (repaint, Vec::new())
+                    }
+                    Ok(_) => {
+                        self.endpoint_error =
+                            Some("endpoint returned an unexpected pane-focus result".to_owned());
+                        (true, Vec::new())
+                    }
+                    Err(_) => (true, Vec::new()),
+                };
+            }
             PendingEndpointKind::ProductAnnouncementDismiss { version, id } => {
                 return match result {
                     Ok(_) => (false, Vec::new()),

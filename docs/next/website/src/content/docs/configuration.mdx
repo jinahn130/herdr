@@ -304,6 +304,15 @@ The sidebar is the main Herdr dashboard. Search `ui.` in the [Config reference](
 
 Set `tab_bar_position = "bottom"` under `[ui]` to place the desktop tab row below the terminal panes. Prefix, Navigate, Copy, and Resize mode bars temporarily replace the bottom tab row while active. The default is `"top"`.
 
+By default, focusing Herdr acknowledges every completed agent in the active tab, changing its status from `done` to `idle`. To acknowledge only the pane you focus while leaving other completed panes marked `done`, configure:
+
+```toml
+[ui]
+done_acknowledgement = "pane"
+```
+
+With pane acknowledgement, merely returning focus to the outer Herdr window does not acknowledge any pane. Clicking a pane, navigating focus to it, or targeting it with `pane focus` / `agent focus` acknowledges that pane only.
+
 Configure an ordered tmux-style status area at the right edge of the tab row:
 
 ```toml
