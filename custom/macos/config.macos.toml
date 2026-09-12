@@ -134,9 +134,11 @@ height = 12
 
 [[keys.command]]
 key = "ctrl+alt+shift+f"
-type = "shell"
-command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-fork-codex-to-claude"
-description = "transfer the focused Codex context into Claude Fable 5.1 on the right"
+type = "popup"
+command = "env HERDR_BIN_PATH=$HOME/.local/bin/herdr $HOME/.local/bin/herdr-transfer-agent"
+description = "choose Claude or Codex as the context-fork destination"
+width = 64
+height = 12
 
 [[keys.command]]
 key = "alt+shift+f"

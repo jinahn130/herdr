@@ -1,0 +1,66 @@
+#!/bin/zsh
+set -eu
+
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+active_pane="${HERDR_ACTIVE_PANE_ID:-}"
+helper_root="${0:A:h}"
+
+if [[ -z "$active_pane" ]]; then
+  print -u2 -r -- "No focused Herdr agent was found."
+  exit 1
+fi
+
+agent_json=$("$herdr_bin" agent get "$active_pane")
+source_kind=$(printf '%s' "$agent_json" | jq -r '.result.agent.agent // empty')
+source_status=$(printf '%s' "$agent_json" | jq -r '.result.agent.agent_status // empty')
+
+case "$source_kind" in
+  codex|claude) ;;
+  *)
+    print -u2 -r -- "The focused pane is not a Codex or Claude agent."
+    exit 1
+    ;;
+esac
+
+if [[ "$source_status" == "working" ]]; then
+  print -u2 -r -- "Wait for the current $source_kind turn to finish, then try again."
+  exit 1
+fi
+
+print -r -- "FORK / TRANSFER THIS ${source_kind:u} CONTEXT TO"
+print -r -- ""
+print -r -- "  C  Claude"
+print -r -- "  X  Codex"
+print -r -- ""
+print -r -- "  Esc  cancel"
+print -r -- ""
+print -n -r -- "Choose destination: "
+
+read -rk 1 choice
+print -r -- ""
+
+case "$choice" in
+  c|C) target_kind="claude" ;;
+  x|X) target_kind="codex" ;;
+  $'\e') exit 0 ;;
+  *)
+    print -u2 -r -- "Press C for Claude or X for Codex."
+    exit 2
+    ;;
+esac
+
+if [[ "$source_kind" == "$target_kind" ]]; then
+  exec "$helper_root/herdr-fork-agent" right
+fi
+
+case "$source_kind:$target_kind" in
+  codex:claude)
+    exec "$helper_root/herdr-fork-codex-to-claude"
+    ;;
+  claude:codex)
+    exec "$helper_root/herdr-fork-claude-to-codex"
+    ;;
+esac
+
+print -u2 -r -- "Unsupported transfer: $source_kind to $target_kind."
+exit 1

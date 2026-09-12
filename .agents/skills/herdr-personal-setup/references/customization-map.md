@@ -33,8 +33,13 @@ has gained an equivalent stale-executable fallback.
   with skipped permissions.
 - `herdr-fork-agent`: resolves the exact Codex/Claude session, creates a pane or
   tab, forks/resumes the provider context, and re-registers Codex child IDs.
+- `herdr-transfer-agent`: asks whether the destination is Claude or Codex,
+  delegates same-provider choices to an exact provider fork, and delegates
+  cross-provider choices to a sanitized semantic handoff.
 - `herdr-fork-codex-to-claude`: writes a sanitized recent-message handoff and
   starts Claude Fable in a right pane.
+- `herdr-fork-claude-to-codex`: writes a sanitized recent-message handoff and
+  starts full-access Codex in a right pane.
 - `herdr-move-pane-next-tab`: chooses an existing tab or creates a named one,
   then re-reports provider session identity after the move.
 - `herdr-rename-agent`: edits the current label, accepts `_` and `-`, handles a

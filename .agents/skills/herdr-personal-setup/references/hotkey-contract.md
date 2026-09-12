@@ -34,7 +34,7 @@ This file documents the intended shortcuts. The live config at
 | Fresh Claude/model chooser | Left Option+C | `herdr-add-claude` |
 | Fork exact focused context right | Left Option+F | `herdr-fork-agent right` |
 | Choose right/bottom fork | Ctrl+Option+F | `herdr-fork-direction` |
-| Semantic Codex-to-Claude transfer | Ctrl+Option+Shift+F | `herdr-fork-codex-to-claude` |
+| Choose Claude/Codex fork destination | Ctrl+Option+Shift+F | `herdr-transfer-agent` |
 | Fork into isolated worktree | Left Option+Shift+F | `herdr-fork-worktree-codex` |
 | Resume existing Codex context | Left Option+E | `herdr-open-codex-context resume` |
 | Fork existing Codex context | Left Option+Shift+E | `herdr-open-codex-context fork` |
@@ -42,10 +42,11 @@ This file documents the intended shortcuts. The live config at
 | Rename focused agent/chat | Ctrl+Option+A or Cmd+L | `herdr-rename-agent` |
 | Toggle BACKLOG | Left Option+B | `herdr-toggle-backlog` |
 
-`Left Option+F` is a true provider-context fork for Codex or Claude. The
-Codex-to-Claude command cannot clone provider-private context; it creates a
-sanitized recent-message handoff and starts Claude Fable with the filesystem as
-authority.
+`Left Option+F` is a true provider-context fork for Codex or Claude.
+`Ctrl+Option+Shift+F` first asks for Claude or Codex. Choosing the current
+provider makes a true provider-context fork. Choosing the other provider cannot
+clone provider-private context; it creates a sanitized recent-message handoff
+and starts the destination agent with the filesystem as authority.
 
 ## Reading and layout
 

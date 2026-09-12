@@ -105,8 +105,9 @@ if [ -f "$config_path" ]; then
 fi
 
 for helper in \
-  herdr-add-codex herdr-add-claude herdr-fork-agent \
-  herdr-fork-codex-to-claude herdr-move-pane-next-tab herdr-rename-agent \
+  herdr-add-codex herdr-add-claude herdr-fork-agent herdr-transfer-agent \
+  herdr-fork-codex-to-claude herdr-fork-claude-to-codex \
+  herdr-move-pane-next-tab herdr-rename-agent \
   herdr-delete-codex-context herdr-toggle-last-prompt herdr-resolve-agent-session; do
   if [ -x "$helper_root/$helper" ]; then
     pass "$helper is installed"

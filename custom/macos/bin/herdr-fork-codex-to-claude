@@ -15,12 +15,12 @@ agent_status=$(printf '%s' "$agent_json" | jq -r '.result.agent.agent_status // 
 active_cwd=$(printf '%s' "$agent_json" | jq -r '.result.agent.cwd // empty')
 
 if [ "$agent_kind" != "codex" ]; then
-  printf '%s\n' "Control-Option-F transfers a focused Codex context to Claude." >&2
+  printf '%s\n' "This transfer requires a focused Codex context." >&2
   exit 1
 fi
 
 if [ "$agent_status" = "working" ]; then
-  printf '%s\n' "Wait for the current Codex turn to finish, then press Control-Option-F again." >&2
+  printf '%s\n' "Wait for the current Codex turn to finish, then try again." >&2
   exit 1
 fi
 
