@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 import pathlib
 import subprocess
@@ -52,7 +53,43 @@ def timestamp_text(value: object, milliseconds: bool = False) -> str:
         return ""
 
 
-def codex_prompts(session_id: str) -> list[dict[str, str]]:
+def provenance_path() -> pathlib.Path:
+    state_root = os.environ.get("XDG_STATE_HOME")
+    if state_root:
+        return pathlib.Path(state_root) / "herdr" / "programmatic-prompts.jsonl"
+    return HOME / ".local" / "state" / "herdr" / "programmatic-prompts.jsonl"
+
+
+def programmatic_prompt_counts() -> dict[tuple[str, str], int]:
+    path = provenance_path()
+    if not path.is_file():
+        return {}
+    counts: dict[tuple[str, str], int] = {}
+    with path.open(encoding="utf-8") as handle:
+        for raw in handle:
+            try:
+                entry = json.loads(raw)
+                session_id = entry.get("session_id")
+                digest = entry.get("sha256")
+                if isinstance(session_id, str) and isinstance(digest, str):
+                    key = (session_id, digest)
+                    counts[key] = counts.get(key, 0) + 1
+            except json.JSONDecodeError:
+                continue
+    return counts
+
+
+def consume_programmatic_prompt(session_id: str, text: str, counts: dict[tuple[str, str], int]) -> bool:
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    key = (session_id, digest)
+    remaining = counts.get(key, 0)
+    if remaining <= 0:
+        return False
+    counts[key] = remaining - 1
+    return True
+
+
+def codex_prompts(session_id: str, injected: dict[tuple[str, str], int]) -> list[dict[str, str]]:
     # This is Codex's prompt-history store—the same data Ctrl-R searches.
     path = HOME / ".codex" / "history.jsonl"
     if not path.is_file():
@@ -65,14 +102,14 @@ def codex_prompts(session_id: str) -> list[dict[str, str]]:
                 if entry.get("session_id") != session_id:
                     continue
                 text = entry.get("text", "")
-                if isinstance(text, str) and text:
+                if isinstance(text, str) and text and not consume_programmatic_prompt(session_id, text, injected):
                     prompts.append({"timestamp": timestamp_text(entry.get("ts")), "text": text})
             except json.JSONDecodeError:
                 continue
     return prompts
 
 
-def claude_prompts(session_id: str) -> list[dict[str, str]]:
+def claude_prompts(session_id: str, injected: dict[tuple[str, str], int]) -> list[dict[str, str]]:
     # Claude Code also keeps a dedicated typed-prompt history for its picker.
     path = HOME / ".claude" / "history.jsonl"
     if not path.is_file():
@@ -85,7 +122,7 @@ def claude_prompts(session_id: str) -> list[dict[str, str]]:
                 if entry.get("sessionId") != session_id:
                     continue
                 text = entry.get("display", "")
-                if isinstance(text, str) and text:
+                if isinstance(text, str) and text and not consume_programmatic_prompt(session_id, text, injected):
                     prompts.append({"timestamp": timestamp_text(entry.get("timestamp"), milliseconds=True), "text": text})
             except json.JSONDecodeError:
                 continue
@@ -101,7 +138,8 @@ def main() -> int:
     session = focused.get("agent_session", {})
     session_id = session.get("value", "")
     agent = focused.get("agent", "")
-    prompts = codex_prompts(session_id) if agent == "codex" else claude_prompts(session_id) if agent == "claude" else []
+    injected = programmatic_prompt_counts()
+    prompts = codex_prompts(session_id, injected) if agent == "codex" else claude_prompts(session_id, injected) if agent == "claude" else []
     print(json.dumps({"agent": agent, "name": focused.get("name") or focused.get("pane_id"), "prompts": prompts}))
     return 0
 

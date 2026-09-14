@@ -841,6 +841,7 @@ fn agent_prompt(args: &[String]) -> std::io::Result<i32> {
             }),
         }),
     })?;
+    super::prompt_provenance::record_agent_prompt(&response, text);
     super::print_response(&response)
 }
 

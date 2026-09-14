@@ -30,6 +30,7 @@ mod machine;
 mod notification;
 mod pane;
 mod plugin;
+mod prompt_provenance;
 mod protocol_guard;
 mod runtime;
 mod server;

@@ -108,7 +108,8 @@ for helper in \
   herdr-add-codex herdr-add-claude herdr-fork-agent herdr-transfer-agent \
   herdr-fork-codex-to-claude herdr-fork-claude-to-codex \
   herdr-move-pane-next-tab herdr-rename-agent \
-  herdr-delete-codex-context herdr-toggle-last-prompt herdr-resolve-agent-session; do
+  herdr-delete-codex-context herdr-toggle-last-prompt herdr-prompt-history \
+  herdr-resolve-agent-session; do
   if [ -x "$helper_root/$helper" ]; then
     pass "$helper is installed"
   else
@@ -150,11 +151,29 @@ for portable_helper in "$portable_mac_root/bin"/*; do
 done
 [ "$portable_helper_failure" = false ] && pass "portable macOS helpers are executable"
 
+if cmp -s "$portable_mac_root/bin/herdr-prompt-history" \
+  "$helper_root/herdr-prompt-history"; then
+  pass "prompt-history helper matches its portable source"
+else
+  warn "installed prompt-history helper differs from its portable source"
+fi
+
 if grep -Fq 'cmd.env_remove("NO_COLOR")' "$repo_root/src/pane.rs" &&
   grep -Fq '.env_remove("NO_COLOR")' "$repo_root/src/server/handoff.rs"; then
   pass "source keeps both NO_COLOR protections"
 else
   warn "one or both NO_COLOR source protections are absent"
+fi
+
+if grep -Fq 'record_agent_prompt(&response, text)' \
+  "$repo_root/src/cli/agent.rs" &&
+  grep -Fq 'source: "herdr_agent_prompt"' \
+    "$repo_root/src/cli/prompt_provenance.rs" &&
+  grep -Fq 'programmatic_prompt_counts' \
+    "$portable_mac_root/bin/herdr-prompt-history"; then
+  pass "programmatic prompt provenance filter is present"
+else
+  warn "programmatic prompt provenance filter is incomplete"
 fi
 
 if cmp -s "$repo_root/src/detect/manifests/claude.toml" \

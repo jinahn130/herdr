@@ -52,7 +52,7 @@ and starts the destination agent with the filesystem as authority.
 
 | Action | macOS shortcut |
 | --- | --- |
-| Last sent prompts | Left Option+L or Cmd+. |
+| Last sent prompts | Left Option+L or Cmd+. (interactive user prompts only) |
 | Full agent history | Left Option+H |
 | Scroll/read mode | Left Option+S |
 | Resize mode | Left Option+R |

@@ -48,7 +48,10 @@ has gained an equivalent stale-executable fallback.
   Codex or Claude stored context; a never-started Codex fork has no stored
   context and only its verified pane is closed.
 - `herdr-toggle-last-prompt`, `herdr-prompt-history`, and
-  `herdr-prompt-viewer`: display recent sent prompts in a closable popup.
+  `herdr-prompt-viewer`: display recent interactive user prompts in a closable
+  popup. Prompts submitted through `herdr agent prompt` are excluded by an
+  exact session-and-hash provenance journal; the journal never stores prompt
+  plaintext.
 - `herdr-arrange-pane`, `herdr-reflow-panes`, and `herdr-size-pane`: implement
   predictable side-by-side/bottom layouts and incremental resizing.
 - `herdr-toggle-backlog`: applies the manual `$backlog` sidebar tag.
@@ -81,6 +84,10 @@ upstream update:
 
 - `src/pane.rs`: remove inherited `NO_COLOR` when starting pane commands.
 - `src/server/handoff.rs`: remove inherited `NO_COLOR` across server handoff.
+- `src/cli/prompt_provenance.rs` and `src/cli/agent.rs`: successful
+  `herdr agent prompt` submissions append a plaintext-free SHA-256 provenance
+  record under Herdr's state directory so personal prompt history can exclude
+  agent-to-agent coordination without hiding real user steering.
 - UI done acknowledgement: `done_acknowledgement = "pane"` means a completed
   agent loses its done indicator only when that pane is focused, not merely
   because another pane in the same tab/window was opened.
