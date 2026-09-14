@@ -1,6 +1,40 @@
 use super::*;
 
 #[test]
+fn enhanced_direct_binding_keeps_host_keyboard_reporting_active_in_terminal_mode() {
+    let config: Config = toml::from_str(
+        r#"
+[[keys.command]]
+key = "ctrl+alt+shift+f"
+command = "echo transfer"
+type = "popup"
+"#,
+    )
+    .unwrap();
+    let state = ClientShellState::new(ClientShellConfig::from_config(&config));
+
+    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert!(state.host_keyboard_report_all_requested());
+}
+
+#[test]
+fn legacy_safe_direct_binding_does_not_force_host_keyboard_reporting() {
+    let config: Config = toml::from_str(
+        r#"
+[[keys.command]]
+key = "ctrl+alt+f"
+command = "echo fork"
+type = "popup"
+"#,
+    )
+    .unwrap();
+    let state = ClientShellState::new(ClientShellConfig::from_config(&config));
+
+    assert_eq!(state.mode, ClientShellMode::Terminal);
+    assert!(!state.host_keyboard_report_all_requested());
+}
+
+#[test]
 fn host_appearance_prefers_explicit_reports_over_background_inference() {
     let mut state = ClientShellState::new(ClientShellConfig::from_config(&Config::default()));
     state.config.theme_runtime.auto_switch = true;

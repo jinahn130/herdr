@@ -81,7 +81,11 @@ impl ClientShellState {
         matches!(
             self.mode,
             ClientShellMode::Prefix | ClientShellMode::Navigate
-        )
+        ) || self
+            .config
+            .keybinds
+            .keybinds
+            .requires_host_keyboard_report_all()
     }
 
     #[cfg(any(unix, test))]

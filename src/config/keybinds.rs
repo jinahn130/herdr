@@ -370,6 +370,13 @@ pub struct Keybinds {
     pub resize_pane_right: ActionKeybinds,
     pub toggle_sidebar: ActionKeybinds,
     pub custom_commands: Vec<CustomCommandKeybind>,
+    pub(crate) requires_host_keyboard_report_all: bool,
+}
+
+impl Keybinds {
+    pub(crate) fn requires_host_keyboard_report_all(&self) -> bool {
+        self.requires_host_keyboard_report_all
+    }
 }
 
 impl Default for Keybinds {
@@ -538,6 +545,7 @@ impl Config {
             resize_pane_right: empty_action!(),
             toggle_sidebar: empty_action!(),
             custom_commands: Vec::new(),
+            requires_host_keyboard_report_all: false,
         };
 
         macro_rules! field_source {
@@ -722,8 +730,23 @@ impl Config {
             }
         }
 
+        keybinds.requires_host_keyboard_report_all = registry
+            .direct
+            .keys()
+            .copied()
+            .any(direct_combo_requires_host_keyboard_report_all);
+
         (prefix_diag, prefix, diagnostics, keybinds)
     }
+}
+
+fn direct_combo_requires_host_keyboard_report_all(combo: KeyCombo) -> bool {
+    let (code, modifiers) = normalize_key_combo(combo);
+    matches!(code, KeyCode::Char(_))
+        && (modifiers.contains(KeyModifiers::SUPER)
+            || modifiers.contains(KeyModifiers::SHIFT)
+                && (modifiers.contains(KeyModifiers::CONTROL)
+                    || modifiers.contains(KeyModifiers::ALT)))
 }
 
 fn reserve_navigate_runtime_keys(registry: &mut BindingRegistry) {
