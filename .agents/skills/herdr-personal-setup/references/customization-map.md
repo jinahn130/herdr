@@ -84,11 +84,6 @@ upstream update:
 
 - `src/pane.rs`: remove inherited `NO_COLOR` when starting pane commands.
 - `src/server/handoff.rs`: remove inherited `NO_COLOR` across server handoff.
-- `src/config/keybinds.rs` and `src/client/shell/input.rs`: keep enhanced host
-  keyboard reporting active when direct bindings need modifier combinations
-  that legacy terminal input cannot represent. This keeps chords such as
-  `Control-Option-Shift-F` provider-independent instead of working only while
-  Codex happens to request Kitty keyboard reporting.
 - `src/cli/prompt_provenance.rs` and `src/cli/agent.rs`: successful
   `herdr agent prompt` submissions append a plaintext-free SHA-256 provenance
   record under Herdr's state directory so personal prompt history can exclude

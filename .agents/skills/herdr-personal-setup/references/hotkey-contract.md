@@ -9,6 +9,10 @@ This file documents the intended shortcuts. The live config at
 - Left Option is configured as `Esc+` and is the Herdr modifier.
 - Right Option is reserved for Fluid voice input. Do not map or globally
   reinterpret it for Herdr.
+- Keep Kitty `REPORT_ALL_KEYS_AS_ESCAPE_CODES` disabled during ordinary pane
+  input. It reports standalone modifier keys and interferes with Right Option
+  voice capture. Encode otherwise ambiguous direct chords with an exact iTerm2
+  key mapping instead.
 - A binding written as `cmd+...` in Herdr works only if iTerm2 actually emits a
   sequence Herdr recognizes. When `Cmd+L` or `Cmd+.` fails, inspect iTerm2's
   profile key mapping before editing Herdr.
@@ -47,6 +51,11 @@ This file documents the intended shortcuts. The live config at
 provider makes a true provider-context fork. Choosing the other provider cannot
 clone provider-private context; it creates a sanitized recent-message handoff
 and starts the destination agent with the filesystem as authority.
+
+For `Ctrl+Option+Shift+F`, iTerm2 must send
+`0x1b 0x5b 0x31 0x30 0x32 0x3a 0x37 0x30 0x3b 0x38 0x75` (CSI-u
+`102:70;8u`). This per-key translation works across Codex and Claude while
+leaving Right Option available to Fluid.
 
 ## Reading and layout
 
