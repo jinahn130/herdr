@@ -58,9 +58,10 @@ has gained an equivalent stale-executable fallback.
 - `herdr-toggle-codex-fast`: toggles Codex fast mode in an idle focused pane.
 - `herdr-resolve-agent-session`: resolves a provider session from verified
   Herdr metadata and provider evidence. Lifecycle helpers depend on this.
-- `herdr-sleep-guard`: watches provider-neutral Herdr working states and holds
-  a macOS idle-sleep prevention assertion, with a ten-minute grace period for
-  transient lifecycle detection gaps. It never changes panes or agents.
+- `herdr-sleep-guard`: checks provider-neutral Herdr working states every 15
+  seconds and holds a macOS idle-sleep prevention assertion, with a ten-minute
+  grace period for transient lifecycle detection gaps. It never changes panes
+  or agents.
 
 `custom/macos/Install-HerdrSleepGuard.sh` installs the guard as the user launch
 agent `com.jin.herdr-sleep-guard`. Display sleep and locking remain enabled;

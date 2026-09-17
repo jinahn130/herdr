@@ -34,11 +34,11 @@ Install the optional sleep guard once:
 ./custom/macos/Install-HerdrSleepGuard.sh
 ```
 
-The user launch agent watches Herdr without touching its panes. Whenever a
-Codex or Claude agent reports `working`, it holds a macOS `caffeinate -i`
-assertion and keeps it for ten minutes after the final working state. Screen
-savers, screen locking, and display sleep still work. Idle system sleep is
-prevented, including on battery; closing the laptop lid, power loss, and network
+The user launch agent checks Herdr every 15 seconds without touching its panes.
+Whenever a Codex or Claude agent reports `working`, it holds a macOS
+`caffeinate -i` assertion and keeps it for ten minutes after the final working
+state. Screen savers, screen locking, and display sleep still work. Idle system
+sleep is prevented, including on battery; closing the laptop lid, power loss, and network
 failure remain outside its control.
 
 ## iTerm2 input contract

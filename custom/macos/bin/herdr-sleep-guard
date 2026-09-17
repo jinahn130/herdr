@@ -2,7 +2,7 @@
 set -u
 
 herdr_bin="${HERDR_BIN_PATH:-$HOME/.local/bin/herdr}"
-poll_seconds="${HERDR_SLEEP_GUARD_POLL_SECONDS:-5}"
+poll_seconds="${HERDR_SLEEP_GUARD_POLL_SECONDS:-15}"
 grace_seconds="${HERDR_SLEEP_GUARD_GRACE_SECONDS:-600}"
 caffeinate_pid=""
 last_working=0
