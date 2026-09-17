@@ -68,6 +68,7 @@ if [ -f "$config_path" ]; then
     'key = "cmd+period"' \
     'key = "alt+f"' \
     'key = "ctrl+alt+shift+f"' \
+    'key = "cmd+alt+shift+f"' \
     'done_acknowledgement = "pane"' \
     'name = "catppuccin"'; do
     if grep -Fq "$expected" "$config_path"; then
@@ -127,6 +128,12 @@ else
 fi
 
 if [ "$(uname -s)" = Darwin ]; then
+  if "$portable_mac_root/Install-iTermTransferKey.sh" --check >/dev/null 2>&1; then
+    pass "iTerm2 transfer-key translations are current"
+  else
+    warn "iTerm2 transfer-key translations are missing or stale"
+  fi
+
   if launchctl print "gui/$(id -u)/com.jin.herdr-sleep-guard" >/dev/null 2>&1; then
     pass "Herdr sleep guard launch agent is running"
   else

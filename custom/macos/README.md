@@ -53,19 +53,19 @@ Herdr runs inside iTerm2 on macOS:
   history.
 - Cmd+Shift+1 through Cmd+Shift+9 use the existing CSI-u translations for tab
   selection.
-- Ctrl+Option+Shift+F must use one exact iTerm2 key mapping that sends the hex
-  codes `0x1b 0x5b 0x31 0x30 0x32 0x3a 0x37 0x30 0x3b 0x38 0x75`. This is the
-  CSI-u encoding of Ctrl+Alt+Shift+F and keeps the transfer chooser available
-  in both Codex and Claude without enabling report-all keyboard mode. Do not
-  solve this chord by globally enabling report-all: that captures standalone
-  Right Option and breaks Fluid voice input.
+- Ctrl+Option+Shift+F and Cmd+Option+Shift+F use exact iTerm2 key mappings that
+  send CSI-u `102:70;8u` and `102:70;12u`, respectively. They keep the transfer
+  chooser available in both Codex and Claude without enabling report-all
+  keyboard mode. Do not solve these chords by globally enabling report-all:
+  that captures standalone Right Option and breaks Fluid voice input.
 
 iTerm2 owns those translations. They are documented rather than installed
 automatically because overwriting a profile's keyboard map could damage other
 terminal shortcuts.
 
-To install only the transfer chord in the Default and Codex Cheatsheet profiles,
-quit iTerm2 (leave the Herdr server running), then run from another terminal:
+To install only the two transfer chords in the Default and Codex Cheatsheet
+profiles, quit iTerm2 (leave the Herdr server running), then run from another
+terminal:
 
 ```sh
 ./custom/macos/Install-iTermTransferKey.sh

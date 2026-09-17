@@ -38,7 +38,7 @@ This file documents the intended shortcuts. The live config at
 | Fresh Claude/model chooser | Left Option+C | `herdr-add-claude` |
 | Fork exact focused context right | Left Option+F | `herdr-fork-agent right` |
 | Choose right/bottom fork | Ctrl+Option+F | `herdr-fork-direction` |
-| Choose Claude/Codex fork destination | Ctrl+Option+Shift+F | `herdr-transfer-agent` |
+| Choose Claude/Codex fork destination | Ctrl+Option+Shift+F or Cmd+Option+Shift+F | `herdr-transfer-agent` |
 | Fork into isolated worktree | Left Option+Shift+F | `herdr-fork-worktree-codex` |
 | Resume existing Codex context | Left Option+E | `herdr-open-codex-context resume` |
 | Fork existing Codex context | Left Option+Shift+E | `herdr-open-codex-context fork` |
@@ -47,15 +47,16 @@ This file documents the intended shortcuts. The live config at
 | Toggle BACKLOG | Left Option+B | `herdr-toggle-backlog` |
 
 `Left Option+F` is a true provider-context fork for Codex or Claude.
-`Ctrl+Option+Shift+F` first asks for Claude or Codex. Choosing the current
-provider makes a true provider-context fork. Choosing the other provider cannot
-clone provider-private context; it creates a sanitized recent-message handoff
-and starts the destination agent with the filesystem as authority.
+`Ctrl+Option+Shift+F` and `Cmd+Option+Shift+F` first ask for Claude or Codex.
+Choosing the current provider makes a true provider-context fork. Choosing the
+other provider cannot clone provider-private context; it creates a sanitized
+recent-message handoff and starts the destination agent with the filesystem as
+authority.
 
-For `Ctrl+Option+Shift+F`, iTerm2 must send
-`0x1b 0x5b 0x31 0x30 0x32 0x3a 0x37 0x30 0x3b 0x38 0x75` (CSI-u
-`102:70;8u`). This per-key translation works across Codex and Claude while
-leaving Right Option available to Fluid.
+For `Ctrl+Option+Shift+F`, iTerm2 must send CSI-u `102:70;8u`. For
+`Cmd+Option+Shift+F`, it must send CSI-u `102:70;12u`. These exact per-key
+translations work across Codex and Claude while leaving Right Option available
+to Fluid.
 
 ## Reading and layout
 
