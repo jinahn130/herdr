@@ -109,7 +109,7 @@ for helper in \
   herdr-fork-codex-to-claude herdr-fork-claude-to-codex \
   herdr-move-pane-next-tab herdr-rename-agent \
   herdr-delete-codex-context herdr-toggle-last-prompt herdr-prompt-history \
-  herdr-resolve-agent-session; do
+  herdr-resolve-agent-session herdr-sleep-guard; do
   if [ -x "$helper_root/$helper" ]; then
     pass "$helper is installed"
   else
@@ -118,10 +118,20 @@ for helper in \
 done
 
 if [ -x "$portable_mac_root/Install-HerdrCustomization.sh" ] &&
+  [ -x "$portable_mac_root/Install-HerdrSleepGuard.sh" ] &&
+  [ -f "$portable_mac_root/com.jin.herdr-sleep-guard.plist" ] &&
   [ -f "$portable_mac_root/config.macos.toml" ]; then
   pass "portable macOS installer and config are present"
 else
   fail "portable macOS installer or config is missing"
+fi
+
+if [ "$(uname -s)" = Darwin ]; then
+  if launchctl print "gui/$(id -u)/com.jin.herdr-sleep-guard" >/dev/null 2>&1; then
+    pass "Herdr sleep guard launch agent is running"
+  else
+    warn "Herdr sleep guard launch agent is not running"
+  fi
 fi
 
 if grep -R -E -n '/Users/jinseongahn|Documents/repo' "$portable_mac_root" >/dev/null 2>&1; then
@@ -156,6 +166,13 @@ if cmp -s "$portable_mac_root/bin/herdr-prompt-history" \
   pass "prompt-history helper matches its portable source"
 else
   warn "installed prompt-history helper differs from its portable source"
+fi
+
+if cmp -s "$portable_mac_root/bin/herdr-sleep-guard" \
+  "$helper_root/herdr-sleep-guard"; then
+  pass "sleep-guard helper matches its portable source"
+else
+  warn "installed sleep-guard helper differs from its portable source"
 fi
 
 if grep -Fq 'cmd.env_remove("NO_COLOR")' "$repo_root/src/pane.rs" &&

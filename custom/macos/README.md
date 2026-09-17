@@ -26,6 +26,21 @@ restart or replace any agent.
 Required command-line tools are `herdr`, `jq`, `rg`, `sqlite3`, `python3`, and
 `zsh`; `codex` and `claude` are required for their respective agent actions.
 
+## Guaranteed long-running agents
+
+Install the optional sleep guard once:
+
+```sh
+./custom/macos/Install-HerdrSleepGuard.sh
+```
+
+The user launch agent watches Herdr without touching its panes. Whenever a
+Codex or Claude agent reports `working`, it holds a macOS `caffeinate -i`
+assertion and keeps it for ten minutes after the final working state. Screen
+savers, screen locking, and display sleep still work. Idle system sleep is
+prevented, including on battery; closing the laptop lid, power loss, and network
+failure remain outside its control.
+
 ## iTerm2 input contract
 
 Herdr runs inside iTerm2 on macOS:
@@ -48,6 +63,18 @@ Herdr runs inside iTerm2 on macOS:
 iTerm2 owns those translations. They are documented rather than installed
 automatically because overwriting a profile's keyboard map could damage other
 terminal shortcuts.
+
+To install only the transfer chord in the Default and Codex Cheatsheet profiles,
+quit iTerm2 (leave the Herdr server running), then run from another terminal:
+
+```sh
+./custom/macos/Install-iTermTransferKey.sh
+```
+
+The opt-in installer preserves every other mapping and both Option settings,
+creates a private preference backup, and refuses to edit while iTerm2 is
+running. Use `--check` for a read-only check while iTerm2 is open. Reopen iTerm2
+and run `h` afterward; the existing agent PTYs remain intact.
 
 ## Manual synchronization
 

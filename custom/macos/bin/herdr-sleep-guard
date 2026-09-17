@@ -1,0 +1,48 @@
+#!/bin/sh
+set -u
+
+herdr_bin="${HERDR_BIN_PATH:-$HOME/.local/bin/herdr}"
+poll_seconds="${HERDR_SLEEP_GUARD_POLL_SECONDS:-5}"
+grace_seconds="${HERDR_SLEEP_GUARD_GRACE_SECONDS:-600}"
+caffeinate_pid=""
+last_working=0
+
+log() {
+  printf '%s %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*"
+}
+
+stop_assertion() {
+  if [ -n "$caffeinate_pid" ] && kill -0 "$caffeinate_pid" 2>/dev/null; then
+    kill "$caffeinate_pid" 2>/dev/null || true
+    wait "$caffeinate_pid" 2>/dev/null || true
+    log "released idle-sleep prevention"
+  fi
+  caffeinate_pid=""
+}
+
+trap 'stop_assertion; exit 0' INT TERM HUP EXIT
+
+while :; do
+  now=$(date +%s)
+  if "$herdr_bin" agent list 2>/dev/null |
+    /usr/bin/jq -e '.result.agents | any(.agent_status == "working")' >/dev/null 2>&1; then
+    last_working=$now
+  fi
+
+  should_assert=false
+  if [ "$last_working" -gt 0 ] && [ $((now - last_working)) -lt "$grace_seconds" ]; then
+    should_assert=true
+  fi
+
+  if [ "$should_assert" = true ]; then
+    if [ -z "$caffeinate_pid" ] || ! kill -0 "$caffeinate_pid" 2>/dev/null; then
+      /usr/bin/caffeinate -i &
+      caffeinate_pid=$!
+      log "preventing idle system sleep while Herdr agents work (pid $caffeinate_pid)"
+    fi
+  else
+    stop_assertion
+  fi
+
+  sleep "$poll_seconds"
+done
